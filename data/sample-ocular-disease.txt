@@ -1,0 +1,15 @@
+Acute angle-closure glaucoma	Sudden painful red eye with mid-dilated fixed pupil, corneal edema, haloes around lights, nausea/vomiting, and markedly elevated IOP. Ocular emergency.
+Hyphema	Blood in the anterior chamber, usually from blunt trauma. Risk of rebleeding and elevated IOP. Advise upright rest and shield.
+Central retinal artery occlusion	Sudden painless monocular vision loss with a pale retina and cherry-red spot at the fovea. Ocular stroke equivalent.
+Central retinal vein occlusion	Sudden painless vision loss with "blood and thunder" fundus: diffuse retinal hemorrhages, dilated tortuous veins, and disc edema.
+Papilledema	Bilateral optic disc swelling due to raised intracranial pressure. Look for blurred disc margins and loss of spontaneous venous pulsation.
+Anterior uveitis	Painful red eye with photophobia, ciliary flush, cells and flare in the anterior chamber, and possible hypopyon. Often associated with HLA-B27.
+Bacterial keratitis	Painful red eye with a corneal infiltrate/ulcer, often contact-lens related. A culture-worthy sight-threatening infection.
+Herpes simplex keratitis	Dendritic corneal ulcer that stains with fluorescein. Reduced corneal sensation. Avoid steroids alone.
+Diabetic retinopathy	Microaneurysms, dot-blot hemorrhages, hard exudates, and in proliferative disease neovascularization. Leading cause of vision loss in working-age adults.
+Age-related macular degeneration	Central vision loss in older adults. Dry form shows drusen; wet form shows choroidal neovascularization and fluid/hemorrhage.
+Retinal detachment	Flashes, floaters, and a curtain/shadow over the visual field. A tear allows fluid under the neurosensory retina.
+Open-angle glaucoma	Slowly progressive optic neuropathy with increased cup-to-disc ratio and arcuate visual field defects, usually with elevated IOP and open angles.
+Amblyopia	Reduced best-corrected acuity from abnormal visual development, due to strabismus, anisometropia, or deprivation. Treat early.
+Horner syndrome	Ptosis, miosis, and anhidrosis from a disrupted oculosympathetic pathway. Anisocoria greater in the dark.
+Third nerve palsy	"Down and out" eye with ptosis. A painful pupil-involving palsy suggests a compressive aneurysm until proven otherwise.
