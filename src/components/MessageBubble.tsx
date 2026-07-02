@@ -22,7 +22,7 @@ export function MessageBubble({ message }: { message: ChatMsg }) {
   return (
     <div className={`flex w-full ${isUser ? "justify-end" : "justify-start"}`}>
       <div
-        className={`max-w-[88%] sm:max-w-[75%] rounded-3xl px-4 py-3 text-[15px] leading-relaxed squish-shadow ${
+        className={`bubble-in max-w-[88%] sm:max-w-[75%] rounded-3xl px-4 py-3 text-[15px] leading-relaxed squish-shadow ${
           isUser
             ? "accent-gradient text-white rounded-br-lg"
             : "glass text-[var(--foreground)] rounded-bl-lg"

@@ -129,7 +129,7 @@ export function Chat() {
       {/* Header */}
       <header className="glass sticky top-0 z-10 flex items-center justify-between px-4 py-3 sm:px-6">
         <div className="flex items-center gap-2.5">
-          <div className="accent-gradient flex h-9 w-9 items-center justify-center rounded-2xl text-lg squish-shadow">
+          <div className="accent-gradient float-y flex h-9 w-9 items-center justify-center rounded-2xl text-lg squish-shadow">
             🩷
           </div>
           <div className="leading-tight">
@@ -144,13 +144,13 @@ export function Chat() {
         <div className="flex items-center gap-1">
           <a
             href="/admin"
-            className="rounded-full px-3 py-1.5 text-xs font-medium text-[var(--muted)] transition hover:bg-[var(--accent)]/10 hover:text-[var(--accent)]"
+            className="rounded-full px-3 py-1.5 text-xs font-medium text-[var(--muted)] transition duration-200 hover:-translate-y-0.5 hover:bg-[var(--accent)]/10 hover:text-[var(--accent)]"
           >
             Study sets
           </a>
           <button
             onClick={logout}
-            className="rounded-full px-3 py-1.5 text-xs font-medium text-[var(--muted)] transition hover:bg-[var(--accent)]/10 hover:text-[var(--accent)]"
+            className="rounded-full px-3 py-1.5 text-xs font-medium text-[var(--muted)] transition duration-200 hover:-translate-y-0.5 hover:bg-[var(--accent)]/10 hover:text-[var(--accent)]"
           >
             Sign out
           </button>
@@ -165,20 +165,21 @@ export function Chat() {
         <div className="mx-auto flex w-full max-w-2xl flex-col gap-4">
           {messages.length === 0 ? (
             <div className="mt-6 flex flex-col items-center text-center sm:mt-16">
-              <div className="accent-gradient mb-4 flex h-16 w-16 items-center justify-center rounded-3xl text-3xl squish-shadow">
+              <div className="accent-gradient breathe mb-4 flex h-16 w-16 items-center justify-center rounded-3xl text-3xl squish-shadow">
                 🩷
               </div>
-              <h2 className="text-xl font-bold">Hi Serena 👋</h2>
+              <h2 className="text-xl font-bold">Hi Squishy 👋</h2>
               <p className="mt-1 max-w-sm text-sm text-[var(--muted)]">
                 Ask me anything from your optometry sets. Type it or tap the mic
                 and speak.
               </p>
               <div className="mt-6 grid w-full max-w-md grid-cols-1 gap-2 sm:grid-cols-2">
-                {SUGGESTIONS.map((s) => (
+                {SUGGESTIONS.map((s, i) => (
                   <button
                     key={s}
                     onClick={() => send(s)}
-                    className="glass squish-shadow rounded-2xl px-4 py-3 text-left text-sm transition hover:scale-[1.02] active:scale-95"
+                    style={{ animationDelay: `${120 + i * 90}ms` }}
+                    className="glass glow-hover chip-in squish-shadow rounded-2xl px-4 py-3 text-left text-sm"
                   >
                     {s}
                   </button>
@@ -201,7 +202,7 @@ export function Chat() {
               requestAnimationFrame(autosize);
             }}
           />
-          <div className="glass squish-shadow flex flex-1 items-end gap-2 rounded-3xl px-3 py-2">
+          <div className="glass squish-shadow composer flex flex-1 items-end gap-2 rounded-3xl px-3 py-2">
             <textarea
               ref={textareaRef}
               value={input}
@@ -223,7 +224,9 @@ export function Chat() {
               onClick={() => send(input)}
               disabled={busy || !input.trim()}
               aria-label="Send"
-              className="accent-gradient flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-white transition active:scale-90 disabled:opacity-40"
+              className={`accent-gradient spring flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-white disabled:opacity-40 ${
+                input.trim() && !busy ? "send-live" : ""
+              }`}
             >
               <svg
                 width="18"
@@ -241,10 +244,6 @@ export function Chat() {
             </button>
           </div>
         </div>
-        <p className="mx-auto mt-1.5 max-w-2xl text-center text-[10px] text-[var(--muted)]">
-          Study aid based on your own sets. Not a substitute for clinical
-          judgment.
-        </p>
       </div>
     </div>
   );
