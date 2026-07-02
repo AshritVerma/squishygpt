@@ -1,69 +1,24 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  PALETTE,
+  SPRITE,
+  SLEEP_SPRITE,
+  TAIL,
+  CHARM_FILL,
+  CHARM_COLOR,
+  GRID_W,
+  GRID_H,
+} from "@/lib/cleiaSprite";
 
 // Cleia — a bit-style pixel-art cavapoo who trots back and forth along the
 // space above the chat bar and, every so often, takes a springy leap to a
 // random spot somewhere on the page (mostly near the chat bar, occasionally
 // way up high) before settling back down to pace again. She chatters
 // ("hi mommy!", "woof woof!"), leans into the direction she's walking, and
-// hops to bark. Tap her for an on-demand woof.
-
-const PALETTE: Record<string, string> = {
-  D: "#8a5636", // dark curls / ears
-  C: "#e3a86e", // coat (apricot)
-  L: "#f4ddbf", // light muzzle / paws
-  N: "#2b2020", // nose
-  E: "#241a1a", // eyes
-  W: "#ffffff", // eye shine
-  P: "#ff8aa8", // tongue
-  K: "#ec4899", // collar (brand pink)
-};
-
-// Each character is one pixel; column index = x, row index = y.
-const SPRITE = [
-  "   DD     DD   ",
-  "  DDDD   DDDD  ",
-  "  DDDDD DDDDD  ",
-  "  DDCCCCCCCDD  ",
-  " DDCCCCCCCCCDD ",
-  " DCCCCCCCCCCCD ",
-  " DCCEECCCEECCD ",
-  " DCCEWCCCEWCCD ",
-  " DCCCLLNLLCCCD ",
-  " DCCCCPPCCCCCD ",
-  "  DCCCCCCCCCD  ",
-  "  DKKKKKKKKD   ",
-  "  CCCCCCCCCCC  ",
-  "  CCC   CCC    ",
-  "  LL     LL    ",
-];
-
-// Same pose but with her eyes shut — used while she naps.
-const SLEEP_SPRITE = SPRITE.map((row, y) => {
-  if (y === 6) return " DCCCCCCCCCCCD ";
-  if (y === 7) return " DCCNNCCCNNCCD ";
-  return row;
-});
-
-// Tail pixels (drawn in their own group so they can wag), grid coords.
-const TAIL: [number, number][] = [
-  [13, 11],
-  [14, 10],
-  [15, 9],
-  [15, 10],
-];
-
-// A small gold "C" charm dangling from her collar.
-const CHARM_FILL: [number, number][] = [
-  [6, 11], [7, 11],
-  [6, 12],
-  [6, 13], [7, 13],
-];
-const CHARM_COLOR = "#ffd23f"; // gold tag
-
-const GRID_W = 17;
-const GRID_H = SPRITE.length;
+// hops to bark. Tap her for an on-demand woof. Triple-tap opens the arcade.
+// Her sprite data lives in src/lib/cleiaSprite.ts (shared with the games).
 
 const CHATTER = ["hi mommy!", "woof woof!", "Woof!", "🐾 hi mommy 🐾", "woof!"];
 const BARKS = ["Woof!", "woof woof!", "hi mommy!"];
@@ -175,6 +130,8 @@ export function CleiaDog({ pixel = 6 }: { pixel?: number }) {
   const [hearts, setHearts] = useState<number[]>([]);
   const [ball, setBall] = useState<{ x: number; y: number } | null>(null);
   const [sitting, setSitting] = useState(false);
+  const [arcadeOpen, setArcadeOpen] = useState(false);
+  const tapTimes = useRef<number[]>([]);
 
   const walkerRef = useRef<HTMLDivElement>(null);
   const dogRef = useRef<HTMLButtonElement>(null);
@@ -580,6 +537,17 @@ export function CleiaDog({ pixel = 6 }: { pixel?: number }) {
     };
   }, [hop, wake, spawnHeart]);
 
+  // Step aside (hide) while the arcade overlay is open.
+  useEffect(() => {
+    const onArcade = (e: Event) => {
+      const open = (e as CustomEvent<{ open: boolean }>).detail?.open ?? false;
+      setArcadeOpen(open);
+    };
+    window.addEventListener("squishy:arcade", onArcade as EventListener);
+    return () =>
+      window.removeEventListener("squishy:arcade", onArcade as EventListener);
+  }, []);
+
   // While Claude streams a reply, Cleia trots to the middle and watches;
   // when it finishes she does a happy little cheer-hop.
   useEffect(() => {
@@ -639,6 +607,16 @@ export function CleiaDog({ pixel = 6 }: { pixel?: number }) {
       wake();
       return;
     }
+    // Triple-tap within 1.2s opens the arcade.
+    const now = Date.now();
+    tapTimes.current = [...tapTimes.current.filter((t) => now - t < 1200), now];
+    if (tapTimes.current.length >= 3) {
+      tapTimes.current = [];
+      say("wanna play?!");
+      navigator.vibrate?.(20);
+      window.dispatchEvent(new Event("squishy:arcade-request"));
+      return;
+    }
     hop();
     navigator.vibrate?.(8);
   };
@@ -646,7 +624,9 @@ export function CleiaDog({ pixel = 6 }: { pixel?: number }) {
   return (
     <div
       aria-hidden
-      className="pointer-events-none fixed inset-x-0 bottom-[calc(env(safe-area-inset-bottom)+84px)] z-40 overflow-visible"
+      className={`pointer-events-none fixed inset-x-0 bottom-[calc(env(safe-area-inset-bottom)+84px)] z-40 overflow-visible ${
+        arcadeOpen ? "hidden" : ""
+      }`}
     >
       {/* dropped tennis ball she runs to fetch */}
       {ball && (

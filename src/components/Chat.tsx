@@ -7,6 +7,7 @@ import { VoiceButton } from "./VoiceButton";
 import { SquishyMascot } from "./SquishyMascot";
 import { FloatingDoodles } from "./FloatingDoodles";
 import { Confetti } from "./Confetti";
+import { Arcade } from "./arcade/Arcade";
 
 const DEFAULT_SUGGESTIONS = [
   "Differentials for a painful red eye",
@@ -115,6 +116,7 @@ export function Chat() {
   const [loadingSug, setLoadingSug] = useState(false);
   const [confetti, setConfetti] = useState(false);
   const [factHidden, setFactHidden] = useState(true);
+  const [arcadeOpen, setArcadeOpen] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -136,6 +138,14 @@ export function Chat() {
     window.addEventListener("squishy:confetti", onConfetti);
     return () => window.removeEventListener("squishy:confetti", onConfetti);
   }, [celebrate]);
+
+  // Cleia's triple-tap easter egg opens the arcade.
+  useEffect(() => {
+    const openArcade = () => setArcadeOpen(true);
+    window.addEventListener("squishy:arcade-request", openArcade);
+    return () =>
+      window.removeEventListener("squishy:arcade-request", openArcade);
+  }, []);
 
   // Personalized suggestions: generated from her cards + recent questions,
   // cached locally so we don't regenerate on every visit.
@@ -358,6 +368,7 @@ export function Chat() {
     <div className="relative flex h-[100dvh] flex-col">
       <FloatingDoodles />
       {confetti && <Confetti onDone={() => setConfetti(false)} />}
+      {arcadeOpen && <Arcade onClose={() => setArcadeOpen(false)} />}
 
       {/* History side panel */}
       <div
@@ -464,16 +475,38 @@ export function Chat() {
             </div>
           </a>
         </div>
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-2 sm:gap-3">
+          <button
+            onClick={() => setArcadeOpen(true)}
+            aria-label="Open Cleia's arcade"
+            className="spring flex h-10 w-10 items-center justify-center rounded-full text-[var(--muted)] transition hover:bg-[var(--accent)]/10 hover:text-[var(--accent)]"
+          >
+            <svg
+              width="19"
+              height="19"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <line x1="6" y1="11" x2="10" y2="11" />
+              <line x1="8" y1="9" x2="8" y2="13" />
+              <line x1="15" y1="12" x2="15.01" y2="12" />
+              <line x1="18" y1="10" x2="18.01" y2="10" />
+              <rect x="2" y="6" width="20" height="12" rx="6" />
+            </svg>
+          </button>
           <a
             href="/admin"
-            className="rounded-full px-3 py-1.5 text-xs font-medium text-[var(--muted)] transition duration-200 hover:-translate-y-0.5 hover:bg-[var(--accent)]/10 hover:text-[var(--accent)]"
+            className="whitespace-nowrap rounded-full px-3 py-2 text-xs font-medium text-[var(--muted)] transition duration-200 hover:-translate-y-0.5 hover:bg-[var(--accent)]/10 hover:text-[var(--accent)]"
           >
             Study sets
           </a>
           <button
             onClick={logout}
-            className="rounded-full px-3 py-1.5 text-xs font-medium text-[var(--muted)] transition duration-200 hover:-translate-y-0.5 hover:bg-[var(--accent)]/10 hover:text-[var(--accent)]"
+            className="whitespace-nowrap rounded-full px-3 py-2 text-xs font-medium text-[var(--muted)] transition duration-200 hover:-translate-y-0.5 hover:bg-[var(--accent)]/10 hover:text-[var(--accent)]"
           >
             Sign out
           </button>
