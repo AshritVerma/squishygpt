@@ -2,6 +2,7 @@
 
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import { SquishyMascot, MascotMood } from "./SquishyMascot";
 
 export interface Source {
   setId: number;
@@ -16,11 +17,27 @@ export interface ChatMsg {
   pending?: boolean;
 }
 
-export function MessageBubble({ message }: { message: ChatMsg }) {
+export function MessageBubble({
+  message,
+  mood = "idle",
+}: {
+  message: ChatMsg;
+  /** Mood for the mascot avatar next to assistant messages. */
+  mood?: MascotMood;
+}) {
   const isUser = message.role === "user";
 
   return (
-    <div className={`flex w-full ${isUser ? "justify-end" : "justify-start"}`}>
+    <div
+      className={`flex w-full items-end gap-2 ${
+        isUser ? "justify-end" : "justify-start"
+      }`}
+    >
+      {!isUser && (
+        <div className="bubble-in -mb-1 shrink-0">
+          <SquishyMascot size={44} interactive={false} mood={mood} />
+        </div>
+      )}
       <div
         className={`bubble-in max-w-[88%] sm:max-w-[75%] rounded-3xl px-4 py-3 text-[15px] leading-relaxed squish-shadow ${
           isUser

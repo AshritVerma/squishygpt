@@ -4,6 +4,8 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { MessageBubble, ChatMsg, Source } from "./MessageBubble";
 import { VoiceButton } from "./VoiceButton";
+import { SquishyMascot } from "./SquishyMascot";
+import { FloatingDoodles } from "./FloatingDoodles";
 
 const SUGGESTIONS = [
   "Differentials for a painful red eye",
@@ -21,8 +23,18 @@ export function Chat() {
   const [messages, setMessages] = useState<ChatMsg[]>([]);
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
+  const [bursts, setBursts] = useState<number[]>([]);
   const scrollRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  function spawnBurst() {
+    const id = Date.now() + Math.random();
+    setBursts((b) => [...b, id]);
+    window.setTimeout(
+      () => setBursts((b) => b.filter((x) => x !== id)),
+      1100,
+    );
+  }
 
   useEffect(() => {
     scrollRef.current?.scrollTo({
@@ -41,6 +53,7 @@ export function Chat() {
   async function send(text: string) {
     const question = text.trim();
     if (!question || busy) return;
+    spawnBurst();
 
     const userMsg: ChatMsg = { id: uid(), role: "user", content: question };
     const assistantId = uid();
@@ -125,12 +138,13 @@ export function Chat() {
   }
 
   return (
-    <div className="flex h-[100dvh] flex-col">
+    <div className="relative flex h-[100dvh] flex-col">
+      <FloatingDoodles />
       {/* Header */}
       <header className="glass sticky top-0 z-10 flex items-center justify-between px-4 py-3 sm:px-6">
         <div className="flex items-center gap-2.5">
-          <div className="accent-gradient float-y flex h-9 w-9 items-center justify-center rounded-2xl text-lg squish-shadow">
-            🩷
+          <div className="float-y">
+            <SquishyMascot size={40} interactive={false} />
           </div>
           <div className="leading-tight">
             <h1 className="text-lg font-extrabold tracking-tight">
@@ -164,14 +178,14 @@ export function Chat() {
       >
         <div className="mx-auto flex w-full max-w-2xl flex-col gap-4">
           {messages.length === 0 ? (
-            <div className="mt-6 flex flex-col items-center text-center sm:mt-16">
-              <div className="accent-gradient breathe mb-4 flex h-16 w-16 items-center justify-center rounded-3xl text-3xl squish-shadow">
-                🩷
+            <div className="mt-10 flex flex-col items-center text-center sm:mt-20">
+              <div className="mb-3">
+                <SquishyMascot size={168} greeting="Hi Squishy! 👋" />
               </div>
-              <h2 className="text-xl font-bold">Hi Squishy 👋</h2>
+              <h2 className="text-xl font-bold">Your optometry brain is ready</h2>
               <p className="mt-1 max-w-sm text-sm text-[var(--muted)]">
                 Ask me anything from your optometry sets. Type it or tap the mic
-                and speak.
+                and speak. (Psst — tap me, I&apos;ll wave back.)
               </p>
               <div className="mt-6 grid w-full max-w-md grid-cols-1 gap-2 sm:grid-cols-2">
                 {SUGGESTIONS.map((s, i) => (
@@ -187,7 +201,21 @@ export function Chat() {
               </div>
             </div>
           ) : (
-            messages.map((m) => <MessageBubble key={m.id} message={m} />)
+            messages.map((m, i) => (
+              <MessageBubble
+                key={m.id}
+                message={m}
+                mood={
+                  m.role !== "assistant"
+                    ? undefined
+                    : m.pending
+                      ? "thinking"
+                      : busy && i === messages.length - 1
+                        ? "talking"
+                        : "idle"
+                }
+              />
+            ))
           )}
         </div>
       </div>
@@ -220,28 +248,50 @@ export function Chat() {
               }}
               className="max-h-40 flex-1 resize-none bg-transparent py-1.5 text-[15px] outline-none placeholder:text-[var(--muted)]"
             />
-            <button
-              onClick={() => send(input)}
-              disabled={busy || !input.trim()}
-              aria-label="Send"
-              className={`accent-gradient spring flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-white disabled:opacity-40 ${
-                input.trim() && !busy ? "send-live" : ""
-              }`}
-            >
-              <svg
-                width="18"
-                height="18"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2.5"
-                strokeLinecap="round"
-                strokeLinejoin="round"
+            <div className="relative shrink-0">
+              {/* heart burst on send */}
+              {bursts.map((id) => (
+                <div
+                  key={id}
+                  className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center"
+                >
+                  {[0, 1, 2, 3, 4].map((n) => (
+                    <span
+                      key={n}
+                      className="heart-up absolute text-sm"
+                      style={{
+                        left: `${(n - 2) * 9}px`,
+                        animationDelay: `${n * 70}ms`,
+                      }}
+                    >
+                      {n % 2 === 0 ? "🩷" : "✨"}
+                    </span>
+                  ))}
+                </div>
+              ))}
+              <button
+                onClick={() => send(input)}
+                disabled={busy || !input.trim()}
+                aria-label="Send"
+                className={`accent-gradient spring flex h-9 w-9 items-center justify-center rounded-full text-white disabled:opacity-40 ${
+                  input.trim() && !busy ? "send-live" : ""
+                }`}
               >
-                <line x1="12" y1="19" x2="12" y2="5" />
-                <polyline points="5 12 12 5 19 12" />
-              </svg>
-            </button>
+                <svg
+                  width="18"
+                  height="18"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <line x1="12" y1="19" x2="12" y2="5" />
+                  <polyline points="5 12 12 5 19 12" />
+                </svg>
+              </button>
+            </div>
           </div>
         </div>
       </div>

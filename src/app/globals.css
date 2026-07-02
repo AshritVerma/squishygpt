@@ -256,6 +256,144 @@ body::before {
 }
 .prose-squish a { color: var(--accent); text-decoration: underline; }
 
+/* ---------------------------------------------------------------------------
+   Playful mascot + ambient life
+--------------------------------------------------------------------------- */
+
+/* Whole-mascot gentle bob + tilt */
+@keyframes mascot-bob {
+  0%, 100% { transform: translateY(0) rotate(-1.5deg); }
+  50%      { transform: translateY(-9px) rotate(1.5deg); }
+}
+.mascot-float {
+  animation: mascot-bob 4s ease-in-out infinite;
+  transform-origin: center;
+}
+
+/* Eyes blink together, once per cycle */
+@keyframes mascot-blink {
+  0%, 90%, 100% { transform: scaleY(1); }
+  93%, 96%      { transform: scaleY(0.08); }
+}
+.mascot-eye {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: mascot-blink 4.6s infinite;
+}
+
+/* Waving arm */
+@keyframes mascot-wave {
+  0%, 100% { transform: rotate(0deg); }
+  25%      { transform: rotate(20deg); }
+  60%      { transform: rotate(-16deg); }
+  80%      { transform: rotate(10deg); }
+}
+.mascot-arm {
+  transform-box: fill-box;
+  transform-origin: 30% 85%;
+}
+.mascot-arm.waving {
+  animation: mascot-wave 0.55s ease-in-out 3;
+}
+
+/* Cheeks pulse */
+@keyframes cheek-pulse {
+  0%, 100% { opacity: 0.5; }
+  50%      { opacity: 0.85; }
+}
+.mascot-cheek {
+  animation: cheek-pulse 3s ease-in-out infinite;
+}
+
+/* Speech bubble pop-in + idle sway */
+@keyframes speech-pop {
+  0%   { opacity: 0; transform: translateY(6px) scale(0.6); }
+  60%  { opacity: 1; transform: translateY(-2px) scale(1.06); }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
+}
+@keyframes speech-sway {
+  0%, 100% { transform: translateY(0) rotate(-1deg); }
+  50%      { transform: translateY(-3px) rotate(1deg); }
+}
+.speech-pop {
+  animation:
+    speech-pop 500ms var(--spring) both,
+    speech-sway 3.5s ease-in-out 600ms infinite;
+}
+
+/* Floating background doodles */
+@keyframes doodle-a {
+  0%, 100% { transform: translate(0, 0) rotate(0deg); }
+  50%      { transform: translate(16px, -26px) rotate(14deg); }
+}
+@keyframes doodle-b {
+  0%, 100% { transform: translate(0, 0) rotate(0deg); }
+  50%      { transform: translate(-20px, -16px) rotate(-16deg); }
+}
+@keyframes doodle-c {
+  0%, 100% { transform: translate(0, 0) rotate(-6deg); }
+  50%      { transform: translate(10px, -34px) rotate(10deg); }
+}
+.doodle {
+  position: absolute;
+  will-change: transform;
+  user-select: none;
+  pointer-events: none;
+  filter: saturate(115%);
+}
+
+/* Heart burst on send */
+@keyframes heart-up {
+  0%   { opacity: 0; transform: translateY(0) scale(0.5); }
+  15%  { opacity: 1; }
+  100% { opacity: 0; transform: translateY(-72px) scale(1.15); }
+}
+.heart-up {
+  animation: heart-up 1s ease-out forwards;
+}
+
+/* Talking mouth: opens and closes while the answer streams */
+@keyframes mouth-talk {
+  0%, 100% { transform: scaleY(0.35); }
+  50%      { transform: scaleY(1); }
+}
+.mascot-mouth {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: mouth-talk 0.32s ease-in-out infinite;
+}
+
+/* Thought bubbles while thinking */
+@keyframes think-pop {
+  0%, 100% { opacity: 0.2; transform: scale(0.8); }
+  50%      { opacity: 1;   transform: scale(1.05); }
+}
+.think-dot {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: think-pop 1.3s ease-in-out infinite;
+}
+
+/* Occasional glint sweeping across the glasses lens */
+@keyframes glint-sweep {
+  0%, 78% { transform: translateX(-14px); opacity: 0; }
+  85%     { opacity: 0.9; }
+  92%, 100% { transform: translateX(16px); opacity: 0; }
+}
+.glasses-glint {
+  animation: glint-sweep 5.5s ease-in-out infinite;
+}
+
+/* Twinkling sparkle doodles */
+@keyframes twinkle {
+  0%, 100% { opacity: 0.35; transform: scale(0.85) rotate(-8deg); }
+  50%      { opacity: 1;    transform: scale(1.2) rotate(8deg); }
+}
+.twinkle {
+  display: inline-block;
+  animation: twinkle 2.6s ease-in-out infinite;
+}
+
 /* Respect user motion preferences: kill the showy loops, keep static styles. */
 @media (prefers-reduced-motion: reduce) {
   body::before { animation: none; }
@@ -266,4 +404,7 @@ body::before {
   .chip-in     { animation: none; }
   .send-live   { animation: none; }
   .recording   { animation: none; }
+  .mascot-float, .mascot-eye, .mascot-arm, .mascot-cheek,
+  .speech-pop, .doodle, .heart-up,
+  .mascot-mouth, .think-dot, .glasses-glint, .twinkle { animation: none; }
 }
