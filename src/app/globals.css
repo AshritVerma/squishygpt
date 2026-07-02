@@ -407,23 +407,16 @@ body::before {
 }
 
 /* ---- Cleia the pixel cavapoo ---- */
-/* Slide in/out from the bottom of the screen */
-.cleia-wrap {
-  transition: transform 520ms var(--spring);
-}
-.cleia-hidden {
-  transform: translateY(150%);
-}
-.cleia-shown {
-  transform: translateY(0);
-}
-/* Idle bob while she's visiting */
+/* Trotting bob while she paces back and forth above the chat bar */
 @keyframes cleia-bob {
-  0%, 100% { transform: translateY(0); }
-  50%      { transform: translateY(-4px); }
+  0%, 100% { transform: translateY(0) scaleX(1) scaleY(1); }
+  25%      { transform: translateY(-3px) scaleX(0.98) scaleY(1.02); }
+  50%      { transform: translateY(0) scaleX(1.02) scaleY(0.98); }
+  75%      { transform: translateY(-3px) scaleX(0.98) scaleY(1.02); }
 }
 .cleia-bob {
-  animation: cleia-bob 1.7s ease-in-out infinite;
+  animation: cleia-bob 0.5s ease-in-out infinite;
+  transform-origin: center bottom;
 }
 /* Excited hop on tap */
 @keyframes cleia-hop {
