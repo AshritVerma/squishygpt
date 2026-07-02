@@ -7,7 +7,8 @@ import { VoiceButton } from "./VoiceButton";
 import { SquishyMascot } from "./SquishyMascot";
 import { FloatingDoodles } from "./FloatingDoodles";
 import { Confetti } from "./Confetti";
-import { Arcade } from "./arcade/Arcade";
+import { Arcade, syncArcadeBests } from "./arcade/Arcade";
+import { fetchClientState, pushClientState } from "@/lib/clientState";
 
 const DEFAULT_SUGGESTIONS = [
   "Differentials for a painful red eye",
@@ -64,7 +65,8 @@ function uid() {
   return Math.random().toString(36).slice(2);
 }
 
-// Conversations are stored locally on the device (localStorage), newest first.
+// Conversations are cached in localStorage and synced to the server
+// (client_state table), so history follows Serena across devices/domains.
 interface StoredConvo {
   id: string;
   title: string;
@@ -73,6 +75,7 @@ interface StoredConvo {
 }
 
 const STORAGE_KEY = "squishygpt.conversations.v1";
+const CONVOS_STATE_KEY = "conversations";
 const MAX_CONVOS = 50;
 
 function readConvos(): StoredConvo[] {
@@ -84,12 +87,32 @@ function readConvos(): StoredConvo[] {
   }
 }
 
+let pushTimer: number | undefined;
+
 function writeConvos(list: StoredConvo[]) {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
   } catch {
-    /* storage full or unavailable — history just won't persist */
+    /* storage full or unavailable — history just won't persist locally */
   }
+  // Debounced server sync (streaming updates fire this on every chunk).
+  window.clearTimeout(pushTimer);
+  pushTimer = window.setTimeout(
+    () => pushClientState(CONVOS_STATE_KEY, list),
+    1500,
+  );
+}
+
+/** Merge local and server histories: union by id, newest updatedAt wins. */
+function mergeConvos(a: StoredConvo[], b: StoredConvo[]): StoredConvo[] {
+  const byId = new Map<string, StoredConvo>();
+  for (const c of [...a, ...b]) {
+    const prev = byId.get(c.id);
+    if (!prev || c.updatedAt > prev.updatedAt) byId.set(c.id, c);
+  }
+  return [...byId.values()]
+    .sort((x, y) => y.updatedAt - x.updatedAt)
+    .slice(0, MAX_CONVOS);
 }
 
 function timeAgo(ts: number): string {
@@ -126,10 +149,25 @@ export function Chat() {
     requestAnimationFrame(() => setConfetti(true));
   }, []);
 
-  // Load saved conversations once on mount.
+  // Load saved conversations once on mount: show the local cache instantly,
+  // then merge in the server copy so other devices' history appears too.
   useEffect(() => {
-    setConvos(readConvos());
+    const local = readConvos();
+    setConvos(local);
     setFactHidden(localStorage.getItem(FACT_KEY) === todayStamp());
+    fetchClientState<StoredConvo[]>(CONVOS_STATE_KEY).then((remote) => {
+      const current = readConvos();
+      if (!Array.isArray(remote) || remote.length === 0) {
+        // Server has nothing yet — seed it from this device.
+        if (current.length > 0) pushClientState(CONVOS_STATE_KEY, current);
+        return;
+      }
+      const merged = mergeConvos(current, remote);
+      setConvos(merged);
+      writeConvos(merged);
+    });
+    // Sync arcade high scores too, so they carry over without opening the arcade.
+    syncArcadeBests();
   }, []);
 
   // Confetti can also be triggered from elsewhere (e.g. Cleia's birthday).
