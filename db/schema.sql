@@ -34,3 +34,11 @@ CREATE INDEX IF NOT EXISTS chunks_set_id_idx ON chunks (set_id);
 -- is the right choice for a personal study set that starts small.
 CREATE INDEX IF NOT EXISTS chunks_embedding_idx
   ON chunks USING hnsw (embedding vector_cosine_ops);
+
+-- Small key/value store for per-user client state (conversation history,
+-- arcade high scores). Single-user app, so no user column needed.
+CREATE TABLE IF NOT EXISTS client_state (
+  key         TEXT PRIMARY KEY,
+  value       JSONB NOT NULL,
+  updated_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+);
