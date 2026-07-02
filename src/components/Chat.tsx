@@ -1,18 +1,21 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { MessageBubble, ChatMsg, Source } from "./MessageBubble";
 import { VoiceButton } from "./VoiceButton";
 import { SquishyMascot } from "./SquishyMascot";
 import { FloatingDoodles } from "./FloatingDoodles";
 
-const SUGGESTIONS = [
+const DEFAULT_SUGGESTIONS = [
   "Differentials for a painful red eye",
   "Signs of acute angle-closure glaucoma",
   "How do I tell CRAO from CRVO?",
   "Management of a corneal ulcer",
 ];
+
+const SUG_KEY = "squishygpt.suggestions.v1";
+const SUG_TTL = 1000 * 60 * 60 * 4; // refresh personalized prompts every 4h
 
 function uid() {
   return Math.random().toString(36).slice(2);
@@ -66,6 +69,8 @@ export function Chat() {
   const [convId, setConvId] = useState(() => uid());
   const [convos, setConvos] = useState<StoredConvo[]>([]);
   const [panelOpen, setPanelOpen] = useState(false);
+  const [suggestions, setSuggestions] = useState<string[]>(DEFAULT_SUGGESTIONS);
+  const [loadingSug, setLoadingSug] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -73,6 +78,51 @@ export function Chat() {
   useEffect(() => {
     setConvos(readConvos());
   }, []);
+
+  // Personalized suggestions: generated from her cards + recent questions,
+  // cached locally so we don't regenerate on every visit.
+  const loadSuggestions = useCallback(async (force: boolean) => {
+    try {
+      if (!force) {
+        const cached = localStorage.getItem(SUG_KEY);
+        if (cached) {
+          const c = JSON.parse(cached) as { at: number; items: string[] };
+          if (c.items?.length && Date.now() - c.at < SUG_TTL) {
+            setSuggestions(c.items);
+            return;
+          }
+        }
+      }
+      setLoadingSug(true);
+      // Recent questions across all saved conversations, newest first.
+      const recentQuestions = readConvos()
+        .flatMap((c) => c.messages.filter((m) => m.role === "user"))
+        .slice(0, 15)
+        .map((m) => m.content);
+      const res = await fetch("/api/suggestions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ recentQuestions }),
+      });
+      if (!res.ok) return;
+      const data = await res.json();
+      if (Array.isArray(data.suggestions) && data.suggestions.length > 0) {
+        setSuggestions(data.suggestions);
+        localStorage.setItem(
+          SUG_KEY,
+          JSON.stringify({ at: Date.now(), items: data.suggestions }),
+        );
+      }
+    } catch {
+      /* keep whatever suggestions we already show */
+    } finally {
+      setLoadingSug(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadSuggestions(false);
+  }, [loadSuggestions]);
 
   // Autosave the current conversation whenever it changes (skip empty and
   // still-pending placeholder messages).
@@ -369,8 +419,39 @@ export function Chat() {
                 Ask me anything from your optometry sets. Type it or tap the mic
                 and speak. (Psst — tap me, I&apos;ll wave back.)
               </p>
-              <div className="mt-6 grid w-full max-w-md grid-cols-1 gap-2 sm:grid-cols-2">
-                {SUGGESTIONS.map((s, i) => (
+              <div className="mt-6 flex w-full max-w-md items-center justify-between px-1">
+                <span className="text-xs font-medium text-[var(--muted)]">
+                  {loadingSug ? "Finding what's relevant…" : "Suggested for you"}
+                </span>
+                <button
+                  onClick={() => loadSuggestions(true)}
+                  disabled={loadingSug}
+                  aria-label="Refresh suggestions"
+                  className="spring flex items-center gap-1 rounded-full px-2 py-1 text-xs text-[var(--muted)] transition hover:bg-[var(--accent)]/10 hover:text-[var(--accent)] disabled:opacity-50"
+                >
+                  <svg
+                    width="13"
+                    height="13"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2.2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    className={loadingSug ? "animate-spin" : ""}
+                  >
+                    <path d="M21 12a9 9 0 1 1-2.64-6.36" />
+                    <path d="M21 3v6h-6" />
+                  </svg>
+                  Shuffle
+                </button>
+              </div>
+              <div
+                className={`mt-2 grid w-full max-w-md grid-cols-1 gap-2 transition-opacity sm:grid-cols-2 ${
+                  loadingSug ? "opacity-60" : "opacity-100"
+                }`}
+              >
+                {suggestions.map((s, i) => (
                   <button
                     key={s}
                     onClick={() => send(s)}
