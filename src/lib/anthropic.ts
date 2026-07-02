@@ -10,7 +10,7 @@ export function anthropicClient(): Anthropic {
 
 // Configurable so Serena can move to a newer Claude model without code changes.
 export const CLAUDE_MODEL =
-  process.env.ANTHROPIC_MODEL || "claude-sonnet-4-5";
+  process.env.ANTHROPIC_MODEL || "claude-opus-4-8";
 
 export const SYSTEM_PROMPT = `You are SquishyGPT, Serena's personal optometry study assistant and clinical reference brain.
 
