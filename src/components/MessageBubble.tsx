@@ -49,16 +49,20 @@ export function MessageBubble({
         }`}
       >
         {message.pending && !message.content ? (
-          <div className="flex items-center gap-1.5 py-1">
-            <span className="typing-dot h-2 w-2 rounded-full bg-[var(--accent)]" />
-            <span
-              className="typing-dot h-2 w-2 rounded-full bg-[var(--accent)]"
-              style={{ animationDelay: "0.2s" }}
-            />
-            <span
-              className="typing-dot h-2 w-2 rounded-full bg-[var(--accent)]"
-              style={{ animationDelay: "0.4s" }}
-            />
+          <div className="snellen py-1" aria-label="Reading your chart…">
+            {[
+              { t: "E", s: 15, d: 0 },
+              { t: "F P", s: 12, d: 0.18 },
+              { t: "T O Z", s: 9.5, d: 0.36 },
+              { t: "L P E D", s: 7.5, d: 0.54 },
+            ].map((r) => (
+              <span
+                key={r.t}
+                style={{ fontSize: r.s, animationDelay: `${r.d}s` }}
+              >
+                {r.t}
+              </span>
+            ))}
           </div>
         ) : isUser ? (
           <p className="whitespace-pre-wrap">{message.content}</p>

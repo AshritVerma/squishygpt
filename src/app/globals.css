@@ -55,6 +55,50 @@ body {
   height: 100%;
 }
 
+/* ---- Themed cursors: optometry glasses by default, Cleia's paw on taps ---- */
+body {
+  cursor: url("/cursor-glasses.svg") 20 21, auto;
+}
+a,
+button,
+label,
+summary,
+select,
+[role="button"],
+[role="tab"],
+.cursor-pointer,
+input[type="button"],
+input[type="submit"],
+input[type="checkbox"],
+input[type="radio"] {
+  cursor: url("/cursor-paw.svg") 18 8, pointer;
+}
+/* Keep a real text caret where you actually type. */
+input:not([type="button"]):not([type="submit"]):not([type="checkbox"]):not([type="radio"]),
+textarea,
+[contenteditable="true"] {
+  cursor: text;
+}
+:disabled,
+[aria-disabled="true"] {
+  cursor: not-allowed;
+}
+
+/* Touch devices don't have a pointer — don't pay for custom cursor images. */
+@media (hover: none), (pointer: coarse) {
+  body,
+  a,
+  button,
+  label,
+  summary,
+  select,
+  [role="button"],
+  [role="tab"],
+  .cursor-pointer {
+    cursor: auto;
+  }
+}
+
 /* Slow, dreamy animated backdrop. The blobs drift on their own layer so the
    background feels alive without impacting scrolling perf. */
 body {
@@ -87,6 +131,34 @@ body::before {
 
 * {
   -webkit-tap-highlight-color: transparent;
+}
+
+/* Blink-open reveal on first load (two eyelids parting) */
+.blink-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  pointer-events: none;
+}
+.blink-lid {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 51%;
+  background: linear-gradient(180deg, var(--bg-1), var(--bg-3));
+  transition: transform 460ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+.blink-top {
+  top: 0;
+}
+.blink-top.open {
+  transform: translateY(-100%);
+}
+.blink-bottom {
+  bottom: 0;
+}
+.blink-bottom.open {
+  transform: translateY(100%);
 }
 
 .glass {
@@ -160,6 +232,26 @@ body::before {
 }
 .typing-dot {
   animation: squish-bounce 1.2s infinite ease-in-out;
+}
+
+/* Snellen eye-chart "thinking" indicator */
+@keyframes snellen-fade {
+  0%, 100% { opacity: 0.16; }
+  50%      { opacity: 1; }
+}
+.snellen {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  line-height: 1.05;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  color: var(--accent);
+  font-family: var(--font-geist-mono), monospace;
+}
+.snellen span {
+  animation: snellen-fade 1.7s ease-in-out infinite;
 }
 
 @keyframes pulse-ring {
@@ -342,6 +434,49 @@ body::before {
   filter: saturate(115%);
 }
 
+/* Cursor sparkle trail (desktop) */
+.sparkle-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 55;
+  pointer-events: none;
+  overflow: hidden;
+}
+.sparkle-dot {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  line-height: 1;
+  filter: saturate(120%);
+  animation: sparkle-fade 650ms ease-out forwards;
+}
+@keyframes sparkle-fade {
+  0%   { opacity: 0.9; transform: translate(-50%, -50%) scale(1) rotate(0deg); }
+  100% { opacity: 0; transform: translate(-50%, -90%) scale(0.4) rotate(30deg); }
+}
+
+/* Confetti burst (milestones + birthday) */
+.confetti-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  pointer-events: none;
+  overflow: hidden;
+}
+.confetti-piece {
+  position: absolute;
+  top: -16px;
+  border-radius: 2px;
+  opacity: 0;
+  animation-name: confetti-fall;
+  animation-timing-function: cubic-bezier(0.2, 0.6, 0.4, 1);
+  animation-fill-mode: forwards;
+}
+@keyframes confetti-fall {
+  0%   { opacity: 0; transform: translate(0, -10vh) rotate(0deg); }
+  10%  { opacity: 1; }
+  100% { opacity: 0; transform: translate(var(--drift), 105vh) rotate(var(--rot)); }
+}
+
 /* Heart burst on send */
 @keyframes heart-up {
   0%   { opacity: 0; transform: translateY(0) scale(0.5); }
@@ -438,9 +573,44 @@ body::before {
   transform-origin: 0% 100%;
   animation: cleia-wag 0.42s ease-in-out infinite;
 }
+/* Faster, happier wag while she's being pet */
+.cleia-wag-fast {
+  transform-box: fill-box;
+  transform-origin: 0% 100%;
+  animation: cleia-wag 0.18s ease-in-out infinite;
+}
+/* Gentle breathing while she naps */
+@keyframes cleia-sleep {
+  0%, 100% { transform: translateY(2px) scaleY(0.97); }
+  50%      { transform: translateY(3px) scaleY(0.94); }
+}
+.cleia-sleep {
+  animation: cleia-sleep 2.8s ease-in-out infinite;
+  transform-origin: center bottom;
+}
+/* Tennis ball bounce-in when dropped for fetch */
+@keyframes ball-drop {
+  0%   { opacity: 0; transform: translateY(-14px) scale(0.6); }
+  60%  { opacity: 1; transform: translateY(2px) scale(1.1); }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
+}
+.ball-drop {
+  animation: ball-drop 320ms cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+/* Drifting "z z z" nap bubble */
+@keyframes cleia-zzz {
+  0%   { opacity: 0; transform: translateY(4px) scale(0.9); }
+  30%  { opacity: 1; transform: translateY(-1px) scale(1); }
+  100% { opacity: 0.75; transform: translateY(-5px) scale(1.02); }
+}
+.cleia-zzz {
+  animation: cleia-zzz 2.6s ease-in-out infinite alternate;
+}
 
 @media (prefers-reduced-motion: reduce) {
-  .cleia-bob, .cleia-hop, .cleia-wag { animation: none; }
+  .cleia-bob, .cleia-hop, .cleia-wag,
+  .cleia-wag-fast, .cleia-sleep, .cleia-zzz { animation: none; }
 }
 
 /* Respect user motion preferences: kill the showy loops, keep static styles. */
@@ -456,4 +626,6 @@ body::before {
   .mascot-float, .mascot-eye, .mascot-arm, .mascot-cheek,
   .speech-pop, .doodle, .heart-up,
   .mascot-mouth, .think-dot, .glasses-glint, .twinkle { animation: none; }
+  .snellen span { animation: none; opacity: 0.85; }
+  .ball-drop { animation: none; }
 }

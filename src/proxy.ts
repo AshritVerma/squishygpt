@@ -21,6 +21,6 @@ export async function proxy(req: NextRequest) {
 export const config = {
   // Protect everything except the login page/endpoint and static assets.
   matcher: [
-    "/((?!login|api/login|_next/static|_next/image|favicon.ico|manifest.webmanifest|icon|apple-icon|robots.txt).*)",
+    "/((?!login|api/login|_next/static|_next/image|favicon.ico|manifest.webmanifest|icon|apple-icon|robots.txt|cursor-glasses.svg|cursor-paw.svg).*)",
   ],
 };

@@ -1,9 +1,17 @@
 "use client";
 
-import { Suspense, useState } from "react";
+import { Suspense, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { SquishyMascot } from "@/components/SquishyMascot";
 import { FloatingDoodles } from "@/components/FloatingDoodles";
+
+// Playful phoropter-style prompts for a wrong password (optometry in-joke).
+const PHOROPTER = [
+  "Hmm, a little blurry. Let's try again — one… or two?",
+  "Better… or worse?",
+  "Okay — two… or three?",
+  "Still fuzzy. Which is clearer, one… or two?",
+];
 
 function LoginForm() {
   const router = useRouter();
@@ -11,6 +19,7 @@ function LoginForm() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const attempts = useRef(0);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -26,8 +35,9 @@ function LoginForm() {
         router.push(params.get("from") || "/");
         router.refresh();
       } else {
-        const data = await res.json().catch(() => ({}));
-        setError(data.error || "Incorrect password");
+        const line = PHOROPTER[attempts.current % PHOROPTER.length];
+        attempts.current += 1;
+        setError(line);
       }
     } catch {
       setError("Something went wrong. Try again.");

@@ -13,7 +13,8 @@
  *   Quizlet's Cloudflare starts returning 403 after ~30 rapid requests. To
  *   handle this the script:
  *     - throttles between sets and retries 403/429 with exponential backoff, and
- *     - caches every set it successfully pulls in localStorage.
+ *     - caches every set it successfully pulls in IndexedDB (large quota, so it
+ *       scales to profiles with hundreds of sets).
  *   So if it still gets cut off, just RE-RUN it (reload the page first, then
  *   paste again): already-cached sets are skipped and only the missing ones
  *   are fetched. After a run or two you'll have all of them, and each run
@@ -25,7 +26,8 @@
  *   window.QZ_THROTTLE_MS = 1200;   // Base delay between set fetches (default 900)
  *   window.QZ_MAX_ATTEMPTS = 6;     // Retries per set on 403/429 (default 5)
  *   window.QZ_DOM_FALLBACK = true;  // Try iframe DOM scrape if API fails (default off; noisy, rarely helps under rate limits)
- *   window.QZ_RESET = true;         // Clear the localStorage cache and start fresh
+ *   window.QZ_RESET = true;         // Clear the IndexedDB cache and start fresh
+ *   window.QZ_SEED_FROM_FILE = true;// Prompt for a previously downloaded quizlet-export.json and load it into the cache first, so a re-run only fetches the sets still missing
  *
  * Why this shape:
  *   Quizlet's server-side pages are gated by Cloudflare, but the same-origin
@@ -35,7 +37,8 @@
  */
 
 (async () => {
-  const CACHE_KEY = "qz_export_cache_v1";
+  const DB_NAME = "qz_export";
+  const STORE = "sets";
 
   const PROFILE_URL_RE = /\/user\/[^/]+\/sets\/?$/;
   if (!PROFILE_URL_RE.test(location.pathname)) {
@@ -56,26 +59,113 @@
   const jitter = (ms) => ms + Math.floor(Math.random() * 400);
 
   // ---------------------------------------------------------------------------
-  // Persistent cache so a re-run resumes instead of starting over.
+  // Persistent cache (IndexedDB) so a re-run resumes instead of starting over.
+  // IndexedDB is used instead of localStorage because a large profile's card
+  // data easily blows past localStorage's ~5MB quota.
   // ---------------------------------------------------------------------------
-  function loadCache() {
+  function openDb() {
+    return new Promise((resolve, reject) => {
+      const req = indexedDB.open(DB_NAME, 1);
+      req.onupgradeneeded = () => {
+        const db = req.result;
+        if (!db.objectStoreNames.contains(STORE)) db.createObjectStore(STORE);
+      };
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => reject(req.error);
+    });
+  }
+  function clearStore(db) {
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(STORE, "readwrite");
+      tx.objectStore(STORE).clear();
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
+  }
+  async function loadCache(db) {
     if (window.QZ_RESET === true) {
-      localStorage.removeItem(CACHE_KEY);
+      await clearStore(db);
       console.log("[quizlet-export] QZ_RESET set — cleared cache.");
       return {};
     }
-    try {
-      return JSON.parse(localStorage.getItem(CACHE_KEY) || "{}");
-    } catch {
-      return {};
-    }
+    return new Promise((resolve, reject) => {
+      const out = {};
+      const tx = db.transaction(STORE, "readonly");
+      const req = tx.objectStore(STORE).openCursor();
+      req.onsuccess = () => {
+        const cur = req.result;
+        if (cur) {
+          out[cur.key] = cur.value;
+          cur.continue();
+        } else {
+          resolve(out);
+        }
+      };
+      req.onerror = () => reject(req.error);
+    });
   }
-  function saveCache(cache) {
-    try {
-      localStorage.setItem(CACHE_KEY, JSON.stringify(cache));
-    } catch (err) {
-      console.warn("[quizlet-export] Could not persist cache:", err.message);
+  function saveOne(db, id, value) {
+    return new Promise((resolve) => {
+      try {
+        const tx = db.transaction(STORE, "readwrite");
+        tx.objectStore(STORE).put(value, String(id));
+        tx.oncomplete = () => resolve();
+        tx.onerror = () => {
+          console.warn(
+            `[quizlet-export] Could not persist set ${id}:`,
+            tx.error?.message,
+          );
+          resolve();
+        };
+      } catch (err) {
+        console.warn(`[quizlet-export] Could not persist set ${id}:`, err.message);
+        resolve();
+      }
+    });
+  }
+
+  function setIdFromUrl(url) {
+    return url?.match(/quizlet\.com\/(\d+)\//)?.[1] || null;
+  }
+
+  // Load a previously downloaded quizlet-export.json into the cache so a
+  // re-run only fetches the sets that are still missing.
+  async function seedFromFile(db) {
+    const file = await new Promise((resolve) => {
+      const input = document.createElement("input");
+      input.type = "file";
+      input.accept = "application/json,.json";
+      input.onchange = () => resolve(input.files?.[0] || null);
+      input.click();
+    });
+    if (!file) {
+      console.warn("[quizlet-export] No file selected; skipping seed.");
+      return 0;
     }
+    let arr;
+    try {
+      arr = JSON.parse(await file.text());
+    } catch (err) {
+      console.warn("[quizlet-export] Could not parse seed file:", err.message);
+      return 0;
+    }
+    if (!Array.isArray(arr)) {
+      console.warn("[quizlet-export] Seed file is not a JSON array; skipping.");
+      return 0;
+    }
+    let seeded = 0;
+    for (const entry of arr) {
+      const id = setIdFromUrl(entry?.url);
+      if (!id || !entry?.cards?.length) continue;
+      await saveOne(db, id, {
+        title: entry.title,
+        url: entry.url,
+        cards: entry.cards,
+      });
+      seeded++;
+    }
+    console.log(`[quizlet-export] Seeded ${seeded} sets from ${file.name}.`);
+    return seeded;
   }
 
   // ---------------------------------------------------------------------------
@@ -282,7 +372,14 @@
   if (ONLY_FIRST) sets = sets.slice(0, 1);
   else if (LIMIT) sets = sets.slice(0, LIMIT);
 
-  const cache = loadCache();
+  const db = await openDb();
+  if (window.QZ_SEED_FROM_FILE === true) {
+    console.log(
+      "[quizlet-export] Pick your previously downloaded quizlet-export.json to seed the cache…",
+    );
+    await seedFromFile(db);
+  }
+  const cache = await loadCache(db);
   const cachedCount = sets.filter((s) => cache[s.id]?.cards?.length).length;
   if (cachedCount) {
     console.log(
@@ -305,7 +402,7 @@
       const { cards, via } = await fetchCardsForSet(set);
       if (cards.length === 0) throw new Error("No cards extracted");
       cache[set.id] = { title: set.title, url: set.url, cards };
-      saveCache(cache);
+      await saveOne(db, set.id, cache[set.id]);
       fetched++;
       console.log(`${tag} ✓ ${set.title} — ${cards.length} cards (${via})`);
     } catch (err) {
