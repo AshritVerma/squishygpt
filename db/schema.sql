@@ -29,7 +29,8 @@ CREATE TABLE IF NOT EXISTS chunks (
 
 CREATE INDEX IF NOT EXISTS chunks_set_id_idx ON chunks (set_id);
 
--- Approximate nearest-neighbour index for cosine similarity search.
+-- HNSW index for cosine similarity search. HNSW gives accurate results at any
+-- scale (unlike ivfflat, which needs many rows per list to behave well), so it
+-- is the right choice for a personal study set that starts small.
 CREATE INDEX IF NOT EXISTS chunks_embedding_idx
-  ON chunks USING ivfflat (embedding vector_cosine_ops)
-  WITH (lists = 100);
+  ON chunks USING hnsw (embedding vector_cosine_ops);
