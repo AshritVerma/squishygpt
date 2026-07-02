@@ -2,6 +2,8 @@
 
 import { Suspense, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { SquishyMascot } from "@/components/SquishyMascot";
+import { FloatingDoodles } from "@/components/FloatingDoodles";
 
 function LoginForm() {
   const router = useRouter();
@@ -35,13 +37,14 @@ function LoginForm() {
   }
 
   return (
-    <div className="flex min-h-[100dvh] items-center justify-center px-5">
+    <div className="relative flex min-h-[100dvh] items-center justify-center px-5">
+      <FloatingDoodles />
       <form
         onSubmit={submit}
         className="glass squish-shadow bubble-in w-full max-w-sm rounded-3xl p-7 text-center"
       >
-        <div className="accent-gradient breathe mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-3xl text-3xl squish-shadow">
-          🩷
+        <div className="mx-auto mb-2 flex justify-center">
+          <SquishyMascot size={132} />
         </div>
         <h1 className="text-2xl font-extrabold tracking-tight">
           <span className="accent-text">SquishyGPT</span>
