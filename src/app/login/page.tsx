@@ -38,9 +38,9 @@ function LoginForm() {
     <div className="flex min-h-[100dvh] items-center justify-center px-5">
       <form
         onSubmit={submit}
-        className="glass squish-shadow w-full max-w-sm rounded-3xl p-7 text-center"
+        className="glass squish-shadow bubble-in w-full max-w-sm rounded-3xl p-7 text-center"
       >
-        <div className="accent-gradient mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-3xl text-3xl squish-shadow">
+        <div className="accent-gradient breathe mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-3xl text-3xl squish-shadow">
           🩷
         </div>
         <h1 className="text-2xl font-extrabold tracking-tight">
@@ -56,7 +56,7 @@ function LoginForm() {
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           placeholder="Enter password"
-          className="glass mt-6 w-full rounded-2xl px-4 py-3 text-center text-[15px] outline-none focus:ring-2 focus:ring-[var(--ring)]"
+          className="glass composer mt-6 w-full rounded-2xl px-4 py-3 text-center text-[15px] outline-none"
         />
 
         {error && <p className="mt-3 text-sm text-rose-500">{error}</p>}
@@ -64,7 +64,9 @@ function LoginForm() {
         <button
           type="submit"
           disabled={loading || !password}
-          className="accent-gradient mt-4 w-full rounded-2xl py-3 font-semibold text-white transition active:scale-95 disabled:opacity-50"
+          className={`accent-gradient spring mt-4 w-full rounded-2xl py-3 font-semibold text-white disabled:opacity-50 ${
+            password && !loading ? "send-live" : ""
+          }`}
         >
           {loading ? "Unlocking…" : "Unlock"}
         </button>
