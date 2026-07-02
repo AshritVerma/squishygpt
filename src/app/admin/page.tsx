@@ -11,6 +11,18 @@ interface SetSummary {
   created_at: string;
 }
 
+interface SetCard {
+  id: number;
+  term: string;
+  definition: string;
+}
+
+interface SetDetail {
+  loading: boolean;
+  error: string;
+  cards: SetCard[];
+}
+
 export default function AdminPage() {
   const router = useRouter();
   const [sets, setSets] = useState<SetSummary[]>([]);
@@ -21,6 +33,8 @@ export default function AdminPage() {
     null,
   );
   const [saving, setSaving] = useState(false);
+  const [openId, setOpenId] = useState<number | null>(null);
+  const [details, setDetails] = useState<Record<number, SetDetail>>({});
 
   async function load() {
     const res = await fetch("/api/sets");
@@ -67,9 +81,51 @@ export default function AdminPage() {
     }
   }
 
+  async function loadCards(id: number) {
+    setDetails((d) => ({
+      ...d,
+      [id]: { loading: true, error: "", cards: d[id]?.cards ?? [] },
+    }));
+    try {
+      const res = await fetch(`/api/sets/${id}`);
+      if (res.status === 401) {
+        router.push("/login");
+        return;
+      }
+      if (!res.ok) throw new Error();
+      const data = await res.json();
+      setDetails((d) => ({
+        ...d,
+        [id]: { loading: false, error: "", cards: data.set?.cards ?? [] },
+      }));
+    } catch {
+      setDetails((d) => ({
+        ...d,
+        [id]: { loading: false, error: "Couldn't load cards.", cards: [] },
+      }));
+    }
+  }
+
+  function toggle(id: number) {
+    if (openId === id) {
+      setOpenId(null);
+      return;
+    }
+    setOpenId(id);
+    if (!details[id] || (details[id].cards.length === 0 && !details[id].error)) {
+      loadCards(id);
+    }
+  }
+
   async function remove(id: number) {
     if (!confirm("Delete this set and its cards?")) return;
     await fetch(`/api/sets?id=${id}`, { method: "DELETE" });
+    if (openId === id) setOpenId(null);
+    setDetails((d) => {
+      const next = { ...d };
+      delete next[id];
+      return next;
+    });
     load();
   }
 
@@ -146,23 +202,98 @@ export default function AdminPage() {
         {sets.length === 0 && (
           <p className="text-sm text-[var(--muted)]">No sets yet. Add one above.</p>
         )}
-        {sets.map((s) => (
-          <div
-            key={s.id}
-            className="glass squish-shadow flex items-center justify-between rounded-2xl px-4 py-3"
-          >
-            <div className="min-w-0">
-              <p className="truncate font-medium">{s.title}</p>
-              <p className="text-xs text-[var(--muted)]">{s.card_count} cards</p>
+        {sets.map((s) => {
+          const open = openId === s.id;
+          const detail = details[s.id];
+          return (
+            <div key={s.id} className="glass squish-shadow rounded-2xl">
+              <div className="flex items-center justify-between gap-2 px-4 py-3">
+                <button
+                  onClick={() => toggle(s.id)}
+                  aria-expanded={open}
+                  className="flex min-w-0 flex-1 items-center gap-2.5 text-left"
+                >
+                  <svg
+                    width="16"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2.5"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    className={`shrink-0 text-[var(--muted)] transition-transform duration-200 ${
+                      open ? "rotate-90" : ""
+                    }`}
+                  >
+                    <polyline points="9 6 15 12 9 18" />
+                  </svg>
+                  <span className="min-w-0">
+                    <span className="block truncate font-medium">{s.title}</span>
+                    <span className="block text-xs text-[var(--muted)]">
+                      {s.card_count} cards
+                    </span>
+                  </span>
+                </button>
+                <button
+                  onClick={() => remove(s.id)}
+                  className="shrink-0 rounded-full px-3 py-1.5 text-xs font-medium text-rose-500 transition hover:bg-rose-500/10"
+                >
+                  Delete
+                </button>
+              </div>
+
+              {open && (
+                <div className="border-t border-[var(--border)] px-4 py-3">
+                  {detail?.loading && (
+                    <p className="py-4 text-center text-sm text-[var(--muted)]">
+                      Loading cards…
+                    </p>
+                  )}
+                  {detail?.error && (
+                    <p className="py-4 text-center text-sm text-rose-500">
+                      {detail.error}
+                    </p>
+                  )}
+                  {detail && !detail.loading && !detail.error && (
+                    <>
+                      {s.source_url && (
+                        <a
+                          href={s.source_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="mb-3 inline-block text-xs text-[var(--accent)] underline"
+                        >
+                          open on Quizlet
+                        </a>
+                      )}
+                      <div className="flex flex-col gap-2">
+                        {detail.cards.map((c) => (
+                          <div
+                            key={c.id}
+                            className="rounded-2xl border border-[var(--border)] bg-[var(--accent)]/[0.04] px-3.5 py-2.5"
+                          >
+                            <p className="font-semibold text-[var(--foreground)]">
+                              {c.term}
+                            </p>
+                            <p className="mt-1 text-sm leading-relaxed text-[var(--muted)]">
+                              {c.definition}
+                            </p>
+                          </div>
+                        ))}
+                        {detail.cards.length === 0 && (
+                          <p className="py-4 text-center text-sm text-[var(--muted)]">
+                            This set has no cards.
+                          </p>
+                        )}
+                      </div>
+                    </>
+                  )}
+                </div>
+              )}
             </div>
-            <button
-              onClick={() => remove(s.id)}
-              className="shrink-0 rounded-full px-3 py-1.5 text-xs font-medium text-rose-500 transition hover:bg-rose-500/10"
-            >
-              Delete
-            </button>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );

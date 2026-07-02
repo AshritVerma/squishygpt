@@ -6,6 +6,7 @@ import { MessageBubble, ChatMsg, Source } from "./MessageBubble";
 import { VoiceButton } from "./VoiceButton";
 import { SquishyMascot } from "./SquishyMascot";
 import { FloatingDoodles } from "./FloatingDoodles";
+import { Confetti } from "./Confetti";
 
 const DEFAULT_SUGGESTIONS = [
   "Differentials for a painful red eye",
@@ -16,6 +17,47 @@ const DEFAULT_SUGGESTIONS = [
 
 const SUG_KEY = "squishygpt.suggestions.v1";
 const SUG_TTL = 1000 * 60 * 60 * 4; // refresh personalized prompts every 4h
+const COUNT_KEY = "squishygpt.questions.v1"; // total questions asked (for milestones)
+const FACT_KEY = "squishygpt.factdismissed.v1"; // date-stamped so it returns daily
+
+// Tiny delightful eye facts, one shown per day on the empty state.
+const EYE_FACTS = [
+  "Your cornea has no blood supply — it gets oxygen straight from the air.",
+  "The eye can distinguish about 10 million different colors.",
+  "Rods outnumber cones roughly 20 to 1 in the human retina.",
+  "Your eyes blink about 15–20 times a minute — that's millions a year.",
+  "The retina processes images upside down; your brain flips them.",
+  "The optic nerve has over a million nerve fibers.",
+  "Newborns don't produce tears until about 3–4 weeks old.",
+  "The fovea is only about 0.3 mm wide but gives you sharpest vision.",
+  "Heterochromia is having two differently colored irises.",
+  "Your eyes can detect a single photon in the dark.",
+  "The lens keeps growing throughout your life.",
+  "Corneas are among the few tissues that can be transplanted by almost anyone.",
+  "The blind spot exists where the optic nerve exits the retina.",
+  "Carrots help vision because of vitamin A — but won't give you super sight.",
+  "Pupils dilate up to 45% when you look at someone you love.",
+  "20/20 vision means normal, not perfect — some people see 20/10.",
+  "The muscles that move your eyes are the fastest in your body.",
+  "Tears have three layers: oily, watery, and mucous.",
+];
+
+function factOfTheDay(): string {
+  const start = new Date(new Date().getFullYear(), 0, 0);
+  const day = Math.floor((Date.now() - start.getTime()) / 86400000);
+  return EYE_FACTS[day % EYE_FACTS.length];
+}
+
+function todayStamp(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function prefersReducedMotion(): boolean {
+  return (
+    typeof window !== "undefined" &&
+    window.matchMedia("(prefers-reduced-motion: reduce)").matches
+  );
+}
 
 function uid() {
   return Math.random().toString(36).slice(2);
@@ -71,13 +113,29 @@ export function Chat() {
   const [panelOpen, setPanelOpen] = useState(false);
   const [suggestions, setSuggestions] = useState<string[]>(DEFAULT_SUGGESTIONS);
   const [loadingSug, setLoadingSug] = useState(false);
+  const [confetti, setConfetti] = useState(false);
+  const [factHidden, setFactHidden] = useState(true);
   const scrollRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  const celebrate = useCallback(() => {
+    if (prefersReducedMotion()) return;
+    setConfetti(false);
+    requestAnimationFrame(() => setConfetti(true));
+  }, []);
 
   // Load saved conversations once on mount.
   useEffect(() => {
     setConvos(readConvos());
+    setFactHidden(localStorage.getItem(FACT_KEY) === todayStamp());
   }, []);
+
+  // Confetti can also be triggered from elsewhere (e.g. Cleia's birthday).
+  useEffect(() => {
+    const onConfetti = () => celebrate();
+    window.addEventListener("squishy:confetti", onConfetti);
+    return () => window.removeEventListener("squishy:confetti", onConfetti);
+  }, [celebrate]);
 
   // Personalized suggestions: generated from her cards + recent questions,
   // cached locally so we don't regenerate on every visit.
@@ -195,6 +253,22 @@ export function Chat() {
     const question = text.trim();
     if (!question || busy) return;
     spawnBurst();
+    navigator.vibrate?.(10);
+
+    // Secret words send Cleia into a happy frenzy (message still sends).
+    if (/\b(woof+|good\s*girl|cleia|squishy)\b/i.test(question)) {
+      window.dispatchEvent(new Event("squishy:feral"));
+    }
+
+    // Milestone: confetti + a proud Cleia every 50th question.
+    try {
+      const n =
+        (parseInt(localStorage.getItem(COUNT_KEY) || "0", 10) || 0) + 1;
+      localStorage.setItem(COUNT_KEY, String(n));
+      if (n % 50 === 0) window.dispatchEvent(new Event("squishy:confetti"));
+    } catch {
+      /* counting is best-effort */
+    }
 
     const userMsg: ChatMsg = { id: uid(), role: "user", content: question };
     const assistantId = uid();
@@ -206,6 +280,7 @@ export function Chat() {
     setInput("");
     setBusy(true);
     requestAnimationFrame(autosize);
+    window.dispatchEvent(new Event("squishy:answer-start"));
 
     try {
       const res = await fetch("/api/chat", {
@@ -270,6 +345,7 @@ export function Chat() {
       );
     } finally {
       setBusy(false);
+      window.dispatchEvent(new Event("squishy:answer-done"));
     }
   }
 
@@ -281,6 +357,7 @@ export function Chat() {
   return (
     <div className="relative flex h-[100dvh] flex-col">
       <FloatingDoodles />
+      {confetti && <Confetti onDone={() => setConfetti(false)} />}
 
       {/* History side panel */}
       <div
@@ -462,6 +539,31 @@ export function Chat() {
                   </button>
                 ))}
               </div>
+              {!factHidden && (
+                <div className="chip-in mt-5 flex max-w-md items-start gap-2 px-1 text-left">
+                  <span className="twinkle mt-0.5 shrink-0 text-sm">👁️</span>
+                  <p className="text-xs leading-relaxed text-[var(--muted)]">
+                    <span className="font-semibold text-[var(--accent)]">
+                      Eye fact of the day:{" "}
+                    </span>
+                    {factOfTheDay()}
+                  </p>
+                  <button
+                    onClick={() => {
+                      setFactHidden(true);
+                      try {
+                        localStorage.setItem(FACT_KEY, todayStamp());
+                      } catch {
+                        /* ignore */
+                      }
+                    }}
+                    aria-label="Dismiss eye fact"
+                    className="shrink-0 rounded-full px-1.5 text-[var(--muted)] transition hover:text-[var(--accent)]"
+                  >
+                    ✕
+                  </button>
+                </div>
+              )}
             </div>
           ) : (
             messages.map((m, i) => (

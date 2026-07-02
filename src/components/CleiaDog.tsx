@@ -39,6 +39,13 @@ const SPRITE = [
   "  LL     LL    ",
 ];
 
+// Same pose but with her eyes shut — used while she naps.
+const SLEEP_SPRITE = SPRITE.map((row, y) => {
+  if (y === 6) return " DCCCCCCCCCCCD ";
+  if (y === 7) return " DCCNNCCCNNCCD ";
+  return row;
+});
+
 // Tail pixels (drawn in their own group so they can wag), grid coords.
 const TAIL: [number, number][] = [
   [13, 11],
@@ -47,11 +54,110 @@ const TAIL: [number, number][] = [
   [15, 10],
 ];
 
+// A small gold "C" charm dangling from her collar.
+const CHARM_FILL: [number, number][] = [
+  [6, 11], [7, 11],
+  [6, 12],
+  [6, 13], [7, 13],
+];
+const CHARM_COLOR = "#ffd23f"; // gold tag
+
 const GRID_W = 17;
 const GRID_H = SPRITE.length;
 
 const CHATTER = ["hi mommy!", "woof woof!", "Woof!", "🐾 hi mommy 🐾", "woof!"];
 const BARKS = ["Woof!", "woof woof!", "hi mommy!"];
+// Extra-sappy lines while she's being pet.
+const PET_LINES = [
+  "i love you mommy!!",
+  "aww 🥰",
+  "best mommy!!",
+  "🐾💕🐾",
+  "pet me forever",
+];
+// Cheers when an answer finishes streaming.
+const CELEBRATE = ["yay!! 🎉", "so smart mommy!!", "good job!! 🐾", "woohoo!"];
+
+// ---- Seasonal accessories (drawn conditionally by date) ----
+type HatDef = { palette: Record<string, string>; rows: string[] };
+
+const PARTY_HAT: HatDef = {
+  palette: { P: "#ec4899", O: "#a855f7", Y: "#ffd23f" },
+  rows: ["   Y   ", "   P   ", "  POP  ", " PPOPP ", "PPPOPPP"],
+};
+const SANTA_HAT: HatDef = {
+  palette: { R: "#e5484d", W: "#ffffff" },
+  rows: [
+    "     WW  ",
+    "  RRRWW  ",
+    " RRRRR   ",
+    "RRRRRR   ",
+    "WWWWWWWWW",
+  ],
+};
+// Heart-shaped sunglasses over the eyes (Valentine's window).
+const HEART_GLASSES: [number, number][] = [
+  [3, 5], [5, 5], [3, 6], [4, 6], [5, 6], [4, 7],
+  [9, 5], [11, 5], [9, 6], [10, 6], [11, 6], [10, 7],
+  [6, 6], [7, 6], [8, 6],
+];
+const GLASSES_PINK = "#ff5fa2";
+
+type Accessory = "santa" | "party" | "hearts" | null;
+
+function accessoryForToday(): Accessory {
+  const d = new Date();
+  const m = d.getMonth();
+  const day = d.getDate();
+  if (m === 11) return "santa"; // December
+  if (m === 7 && day === 25) return "party"; // Serena's birthday
+  if (m === 1 && day >= 7 && day <= 17) return "hearts"; // Valentine's window
+  return null;
+}
+
+function isBirthday(): boolean {
+  const d = new Date();
+  return d.getMonth() === 7 && d.getDate() === 25;
+}
+
+function HatSprite({ hat, pixel }: { hat: HatDef; pixel: number }) {
+  const w = hat.rows[0].length;
+  const h = hat.rows.length;
+  return (
+    <svg
+      width={w * pixel}
+      height={h * pixel}
+      viewBox={`0 0 ${w} ${h}`}
+      shapeRendering="crispEdges"
+      style={{ imageRendering: "pixelated", display: "block" }}
+      aria-hidden
+    >
+      {hat.rows.flatMap((row, y) =>
+        row.split("").map((ch, x) => {
+          const fill = hat.palette[ch];
+          if (!fill) return null;
+          return (
+            <rect key={`${x}-${y}`} x={x} y={y} width={1} height={1} fill={fill} />
+          );
+        }),
+      )}
+    </svg>
+  );
+}
+
+// Time-of-day flavored chatter, layered onto the base pool.
+function chatterPool(): string[] {
+  const now = new Date();
+  const h = now.getHours();
+  const extra: string[] = [];
+  if (h < 9) extra.push("good morning mommy!", "did you sleep well? 🐾");
+  if (h >= 0 && h < 5) extra.push("go to sleep 🐾", "it's late mommy…");
+  if (now.getDay() === 5) extra.push("happy friday!!", "it's friyay 🎉");
+  if (now.getMonth() === 7) extra.push("it's your birthday month!! 🎂");
+  if (now.getMonth() === 7 && now.getDate() === 25)
+    extra.push("HAPPY BIRTHDAY MOMMY!! 🎂🎉");
+  return [...CHATTER, ...extra];
+}
 
 const pick = (arr: string[]) => arr[Math.floor(Math.random() * arr.length)];
 
@@ -60,13 +166,33 @@ export function CleiaDog({ pixel = 6 }: { pixel?: number }) {
   const [hopping, setHopping] = useState(false);
   const [bubble, setBubble] = useState<string | null>("hi mommy!");
   const [mounted, setMounted] = useState(false);
+  // Accessory + birthday mode are resolved after mount so the server and
+  // client render the same initial markup (and so ?cleia= previews work).
+  const [accessory, setAccessory] = useState<Accessory>(null);
+  const [birthdayMode, setBirthdayMode] = useState(false);
+  const [petting, setPetting] = useState(false);
+  const [napping, setNapping] = useState(false);
+  const [hearts, setHearts] = useState<number[]>([]);
+  const [ball, setBall] = useState<{ x: number; y: number } | null>(null);
+  const [sitting, setSitting] = useState(false);
 
   const walkerRef = useRef<HTMLDivElement>(null);
+  const dogRef = useRef<HTMLButtonElement>(null);
+  const fetchingRef = useRef(false);
+  const fetchToRef = useRef<(x: number, y: number) => void>(() => {});
+  const sittingRef = useRef(false);
+  const sitToRef = useRef<() => void>(() => {});
   const posRef = useRef(28);
   const posYRef = useRef(0); // vertical offset; 0 = baseline above chat bar, negative = up the page
   const dirRef = useRef(1);
   const hoppingRef = useRef(false);
   const jumpingRef = useRef(false); // true while mid-leap (CSS transition owns transform)
+  const pettingRef = useRef(false);
+  const nappingRef = useRef(false);
+  const lastActivityRef = useRef(0);
+  const holdTimer = useRef<number | undefined>(undefined);
+  const heartTimer = useRef<number | undefined>(undefined);
+  const suppressClickRef = useRef(false);
   const jumpToRef = useRef<() => void>(() => {});
   const rafRef = useRef<number | undefined>(undefined);
   const bubbleTimer = useRef<number | undefined>(undefined);
@@ -80,6 +206,15 @@ export function CleiaDog({ pixel = 6 }: { pixel?: number }) {
   useEffect(() => {
     hoppingRef.current = hopping;
   }, [hopping]);
+  useEffect(() => {
+    pettingRef.current = petting;
+  }, [petting]);
+  useEffect(() => {
+    nappingRef.current = napping;
+  }, [napping]);
+  useEffect(() => {
+    sittingRef.current = sitting;
+  }, [sitting]);
 
   const say = useCallback((text: string) => {
     setBubble(text);
@@ -97,6 +232,35 @@ export function CleiaDog({ pixel = 6 }: { pixel?: number }) {
     },
     [say],
   );
+
+  // Wake from a nap with a little startled hop. Guarded so overlapping
+  // wake triggers (tapping her + the global listener) only fire once.
+  const wake = useCallback(() => {
+    if (!nappingRef.current) return;
+    nappingRef.current = false;
+    setNapping(false);
+    hop("!");
+  }, [hop]);
+
+  const spawnHeart = useCallback(() => {
+    const id = Date.now() + Math.random();
+    setHearts((h) => [...h, id]);
+    window.setTimeout(() => setHearts((h) => h.filter((x) => x !== id)), 1000);
+  }, []);
+
+  const startPet = useCallback(() => {
+    setPetting(true);
+    say(pick(PET_LINES));
+    navigator.vibrate?.(12);
+    spawnHeart();
+    window.clearInterval(heartTimer.current);
+    heartTimer.current = window.setInterval(spawnHeart, 260);
+  }, [say, spawnHeart]);
+
+  const stopPet = useCallback(() => {
+    setPetting(false);
+    window.clearInterval(heartTimer.current);
+  }, []);
 
   // Pacing loop: walk back and forth, pausing mid-stride while hopping or
   // mid-leap. A leap (see jumpToRef) hands transform control to a CSS
@@ -159,11 +323,79 @@ export function CleiaDog({ pixel = 6 }: { pixel?: number }) {
       }, 900);
     };
 
+    // Fetch: sprint to a dropped ball (viewport coords), grab it, trot back.
+    fetchToRef.current = (clientX: number, clientY: number) => {
+      if (
+        reduce ||
+        jumpingRef.current ||
+        fetchingRef.current ||
+        nappingRef.current ||
+        pettingRef.current
+      )
+        return;
+      const el = dogRef.current;
+      if (!el) return;
+      // Map viewport coords into the walker's transform space by measuring
+      // the dog's current on-screen box and subtracting the live translate.
+      const rect = el.getBoundingClientRect();
+      const zeroLeft = rect.left - posRef.current;
+      const zeroTop = rect.top - posYRef.current;
+      const b = bounds();
+      const targetX = Math.min(
+        Math.max(clientX - dogW / 2 - zeroLeft, b.min),
+        b.max,
+      );
+      const targetY = Math.min(0, clientY - dogH / 2 - zeroTop);
+
+      fetchingRef.current = true;
+      jumpingRef.current = true;
+      const savedX = posRef.current;
+      const dir = targetX >= posRef.current ? 1 : -1;
+      dirRef.current = dir;
+      setFacingDir(dir);
+      posRef.current = targetX;
+      posYRef.current = targetY;
+      apply(true);
+      hop("i got it!!");
+
+      window.setTimeout(() => {
+        setBall(null);
+        say("got it!! 🎾");
+        setFacingDir(savedX >= targetX ? 1 : -1);
+        posRef.current = savedX;
+        posYRef.current = 0;
+        apply(true);
+        window.setTimeout(() => {
+          fetchingRef.current = false;
+          jumpingRef.current = false;
+        }, 760);
+      }, 800);
+    };
+
+    // Trot to the middle and sit, watching the answer stream in.
+    sitToRef.current = () => {
+      if (reduce || jumpingRef.current || fetchingRef.current) return;
+      const b = bounds();
+      const centerX = (b.min + b.max) / 2;
+      dirRef.current = centerX >= posRef.current ? 1 : -1;
+      setFacingDir(dirRef.current);
+      posRef.current = centerX;
+      posYRef.current = 0;
+      apply(true);
+    };
+
     let last = performance.now();
     const step = (t: number) => {
       const dt = Math.min(0.05, (t - last) / 1000);
       last = t;
-      if (!reduce && !hoppingRef.current && !jumpingRef.current) {
+      if (
+        !reduce &&
+        !hoppingRef.current &&
+        !jumpingRef.current &&
+        !nappingRef.current &&
+        !pettingRef.current &&
+        !sittingRef.current
+      ) {
         const b = bounds();
         posRef.current += dirRef.current * speed * dt;
         if (posRef.current <= b.min) {
@@ -196,7 +428,13 @@ export function CleiaDog({ pixel = 6 }: { pixel?: number }) {
     const scheduleChatter = () => {
       chatterT = window.setTimeout(
         () => {
-          if (!hoppingRef.current && !jumpingRef.current) say(pick(CHATTER));
+          if (
+            !hoppingRef.current &&
+            !jumpingRef.current &&
+            !nappingRef.current &&
+            !pettingRef.current
+          )
+            say(pick(chatterPool()));
           scheduleChatter();
         },
         5000 + Math.random() * 6000,
@@ -205,7 +443,7 @@ export function CleiaDog({ pixel = 6 }: { pixel?: number }) {
     const scheduleJump = () => {
       jumpT = window.setTimeout(
         () => {
-          jumpToRef.current();
+          if (!nappingRef.current && !pettingRef.current) jumpToRef.current();
           scheduleJump();
         },
         5000 + Math.random() * 6000,
@@ -223,13 +461,205 @@ export function CleiaDog({ pixel = 6 }: { pixel?: number }) {
     };
   }, [say]);
 
+  // Sleepiness: after a couple minutes of no interaction she lies down for a
+  // nap; any pointer or key activity wakes her with a startled hop.
+  useEffect(() => {
+    const IDLE_MS = 120000;
+    lastActivityRef.current = Date.now();
+    const reg = () => {
+      lastActivityRef.current = Date.now();
+      if (nappingRef.current) wake();
+    };
+    window.addEventListener("pointerdown", reg);
+    window.addEventListener("keydown", reg);
+    const iv = window.setInterval(() => {
+      if (
+        !nappingRef.current &&
+        !pettingRef.current &&
+        !jumpingRef.current &&
+        Date.now() - lastActivityRef.current > IDLE_MS
+      ) {
+        setNapping(true);
+      }
+    }, 5000);
+    return () => {
+      window.removeEventListener("pointerdown", reg);
+      window.removeEventListener("keydown", reg);
+      window.clearInterval(iv);
+      window.clearInterval(heartTimer.current);
+      window.clearTimeout(holdTimer.current);
+    };
+  }, [wake]);
+
+  // Fetch: tap an empty area of the page and Cleia runs to grab the ball.
+  // Ignore taps on interactive/content surfaces so it only fires on open space.
+  useEffect(() => {
+    const IGNORE =
+      'button, a, input, textarea, select, label, summary, [role="button"], [contenteditable], form, header, aside, .glass, .accent-gradient, svg';
+    const onDown = (e: PointerEvent) => {
+      if (
+        fetchingRef.current ||
+        jumpingRef.current ||
+        nappingRef.current ||
+        pettingRef.current
+      )
+        return;
+      if (e.button && e.button !== 0) return;
+      const t = e.target as HTMLElement | null;
+      if (!t || t.closest(IGNORE)) return;
+      setBall({ x: e.clientX, y: e.clientY });
+      fetchToRef.current(e.clientX, e.clientY);
+    };
+    window.addEventListener("pointerdown", onDown);
+    return () => window.removeEventListener("pointerdown", onDown);
+  }, []);
+
+  // Resolve today's accessory + birthday mode once mounted. A ?cleia= query
+  // param forces a look for previewing: santa | party | hearts | birthday
+  // (and nap | feral to demo those states).
+  useEffect(() => {
+    const o = new URLSearchParams(window.location.search).get("cleia");
+    const acc: Accessory =
+      o === "santa" || o === "party" || o === "hearts"
+        ? o
+        : o === "birthday"
+          ? "party"
+          : accessoryForToday();
+    setAccessory(acc);
+    const bday = isBirthday() || o === "birthday";
+    setBirthdayMode(bday);
+    if (bday) setBubble("HAPPY BIRTHDAY MOMMY!! 🎂🎉");
+    if (o === "nap") setNapping(true);
+    if (o === "feral") {
+      const t = window.setTimeout(
+        () => window.dispatchEvent(new Event("squishy:feral")),
+        700,
+      );
+      return () => window.clearTimeout(t);
+    }
+  }, []);
+
+  // On her birthday, throw confetti and cheer shortly after load.
+  useEffect(() => {
+    if (!birthdayMode) return;
+    const t = window.setTimeout(() => {
+      window.dispatchEvent(new Event("squishy:confetti"));
+      hop("HAPPY BIRTHDAY!! 🎉");
+    }, 900);
+    return () => window.clearTimeout(t);
+  }, [birthdayMode, hop]);
+
+  // Secret words / confetti reactions from the chat.
+  useEffect(() => {
+    const feralLines = [
+      "woof woof woof!!",
+      "🐾🐾🐾",
+      "i love you!!",
+      "ZOOMIES!!",
+      "woooof!",
+    ];
+    const onFeral = () => {
+      if (nappingRef.current) wake();
+      let n = 0;
+      const iv = window.setInterval(() => {
+        hop(pick(feralLines));
+        spawnHeart();
+        spawnHeart();
+        if (++n >= 6) window.clearInterval(iv);
+      }, 360);
+    };
+    const onConfetti = () => {
+      if (nappingRef.current) wake();
+      hop("so smart mommy!!");
+    };
+    window.addEventListener("squishy:feral", onFeral);
+    window.addEventListener("squishy:confetti", onConfetti);
+    return () => {
+      window.removeEventListener("squishy:feral", onFeral);
+      window.removeEventListener("squishy:confetti", onConfetti);
+    };
+  }, [hop, wake, spawnHeart]);
+
+  // While Claude streams a reply, Cleia trots to the middle and watches;
+  // when it finishes she does a happy little cheer-hop.
+  useEffect(() => {
+    const onStart = () => {
+      if (nappingRef.current) wake();
+      setSitting(true);
+      sitToRef.current();
+    };
+    const onDone = () => {
+      setSitting(false);
+      hop(pick(CELEBRATE));
+    };
+    window.addEventListener("squishy:answer-start", onStart);
+    window.addEventListener("squishy:answer-done", onDone);
+    return () => {
+      window.removeEventListener("squishy:answer-start", onStart);
+      window.removeEventListener("squishy:answer-done", onDone);
+    };
+  }, [hop, wake]);
+
   const px = (n: number) => n * pixel;
+  const activeSprite = napping ? SLEEP_SPRITE : SPRITE;
+  const bodyClass = napping
+    ? "cleia-sleep"
+    : hopping
+      ? "cleia-hop"
+      : sitting
+        ? ""
+        : "cleia-bob";
+  const wagClass = napping ? "" : petting ? "cleia-wag-fast" : "cleia-wag";
+
+  const beginHold = () => {
+    lastActivityRef.current = Date.now();
+    if (nappingRef.current) {
+      wake();
+      return;
+    }
+    window.clearTimeout(holdTimer.current);
+    holdTimer.current = window.setTimeout(startPet, 350);
+  };
+  const endHold = () => {
+    window.clearTimeout(holdTimer.current);
+    if (pettingRef.current) {
+      stopPet();
+      suppressClickRef.current = true;
+      window.setTimeout(() => {
+        suppressClickRef.current = false;
+      }, 350);
+    }
+  };
+  const onTap = () => {
+    if (suppressClickRef.current) {
+      suppressClickRef.current = false;
+      return;
+    }
+    if (nappingRef.current) {
+      wake();
+      return;
+    }
+    hop();
+    navigator.vibrate?.(8);
+  };
 
   return (
     <div
       aria-hidden
       className="pointer-events-none fixed inset-x-0 bottom-[calc(env(safe-area-inset-bottom)+84px)] z-40 overflow-visible"
     >
+      {/* dropped tennis ball she runs to fetch */}
+      {ball && (
+        <div
+          className="ball-drop pointer-events-none fixed z-30 h-3 w-3 rounded-full"
+          style={{
+            left: ball.x - 6,
+            top: ball.y - 6,
+            background: "radial-gradient(circle at 35% 30%, #eaff6b, #b6d94a)",
+            boxShadow: "inset -1px -1px 0 rgba(0,0,0,.15), 0 1px 2px rgba(0,0,0,.2)",
+          }}
+        />
+      )}
       <div
         ref={walkerRef}
         className={`absolute left-0 bottom-0 transition-opacity duration-700 ${
@@ -238,32 +668,66 @@ export function CleiaDog({ pixel = 6 }: { pixel?: number }) {
         style={{ width: dogW }}
       >
         <div className="relative flex flex-col items-center">
-          {/* speech bubble */}
-          {bubble && (
+          {/* floating hearts while she's being pet */}
+          {hearts.map((id, i) => (
+            <span
+              key={id}
+              className="heart-up pointer-events-none absolute bottom-8 text-sm"
+              style={{ left: `${(i % 3) * 12 - 12}px` }}
+            >
+              {i % 2 === 0 ? "🩷" : "💕"}
+            </span>
+          ))}
+
+          {/* speech / sleepy bubble */}
+          {napping ? (
+            <>
+              <div className="glass squish-shadow cleia-zzz mb-1 whitespace-nowrap rounded-2xl px-2.5 py-1 text-xs font-bold text-[var(--muted)]">
+                z z z 💤
+              </div>
+              <div className="glass -mt-1.5 mb-0.5 h-2.5 w-2.5 rotate-45 rounded-[2px]" />
+            </>
+          ) : bubble ? (
             <>
               <div className="glass squish-shadow speech-pop mb-1 whitespace-nowrap rounded-2xl px-2.5 py-1 text-xs font-bold text-[var(--foreground)]">
                 {bubble}
               </div>
               <div className="glass -mt-1.5 mb-0.5 h-2.5 w-2.5 rotate-45 rounded-[2px]" />
             </>
+          ) : (
+            <div className="mb-[26px]" />
           )}
-          {!bubble && <div className="mb-[26px]" />}
 
           {/* facing lean (rotates into the walk direction) */}
           <div
             style={{
-              transform: `rotate(${facingDir * 3}deg)`,
+              transform: `rotate(${napping ? 0 : facingDir * 3}deg)`,
               transition: "transform 260ms ease",
             }}
           >
             <button
+              ref={dogRef}
               type="button"
-              onClick={() => hop()}
-              aria-label="Cleia the cavapoo — woof!"
-              className={`pointer-events-auto cursor-pointer bg-transparent p-0 ${
-                hopping ? "cleia-hop" : "cleia-bob"
-              }`}
+              onClick={onTap}
+              onPointerDown={beginHold}
+              onPointerUp={endHold}
+              onPointerLeave={endHold}
+              onPointerCancel={endHold}
+              aria-label="Cleia the cavapoo — tap to woof, hold to pet"
+              style={{ touchAction: "none" }}
+              className={`pointer-events-auto relative cursor-pointer bg-transparent p-0 ${bodyClass}`}
             >
+              {(accessory === "santa" || accessory === "party") && (
+                <div
+                  className="pointer-events-none absolute left-1/2 -translate-x-1/2"
+                  style={{ bottom: `calc(100% - ${px(3)}px)` }}
+                >
+                  <HatSprite
+                    hat={accessory === "santa" ? SANTA_HAT : PARTY_HAT}
+                    pixel={pixel}
+                  />
+                </div>
+              )}
               <svg
                 width={px(GRID_W)}
                 height={px(GRID_H)}
@@ -273,7 +737,7 @@ export function CleiaDog({ pixel = 6 }: { pixel?: number }) {
                 role="img"
               >
                 {/* wagging tail (behind body) */}
-                <g className="cleia-wag">
+                <g className={wagClass}>
                   {TAIL.map(([x, y], i) => (
                     <rect
                       key={`t${i}`}
@@ -286,7 +750,7 @@ export function CleiaDog({ pixel = 6 }: { pixel?: number }) {
                   ))}
                 </g>
                 {/* body */}
-                {SPRITE.flatMap((row, y) =>
+                {activeSprite.flatMap((row, y) =>
                   row.split("").map((ch, x) => {
                     const fill = PALETTE[ch];
                     if (!fill) return null;
@@ -302,6 +766,29 @@ export function CleiaDog({ pixel = 6 }: { pixel?: number }) {
                     );
                   }),
                 )}
+                {/* gold "C" charm hanging from her collar */}
+                {CHARM_FILL.map(([x, y]) => (
+                  <rect
+                    key={`cf${x}-${y}`}
+                    x={x}
+                    y={y}
+                    width={1}
+                    height={1}
+                    fill={CHARM_COLOR}
+                  />
+                ))}
+                {/* heart sunglasses (Valentine's) */}
+                {accessory === "hearts" &&
+                  HEART_GLASSES.map(([x, y]) => (
+                    <rect
+                      key={`hg${x}-${y}`}
+                      x={x}
+                      y={y}
+                      width={1}
+                      height={1}
+                      fill={GLASSES_PINK}
+                    />
+                  ))}
               </svg>
             </button>
           </div>
