@@ -91,6 +91,20 @@ export interface SetDetail {
   cards: SetCard[];
 }
 
+/** A random sample of card terms across all sets, for seeding suggestions. */
+export async function sampleTerms(
+  limit = 40,
+): Promise<{ term: string; set_title: string }[]> {
+  return query<{ term: string; set_title: string }>(
+    `SELECT c.term, s.title AS set_title
+     FROM cards c
+     JOIN sets s ON s.id = c.set_id
+     ORDER BY random()
+     LIMIT $1`,
+    [limit],
+  );
+}
+
 export async function getSet(id: number): Promise<SetDetail | null> {
   const [set] = await query<{
     id: number;

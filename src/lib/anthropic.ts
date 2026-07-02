@@ -12,6 +12,11 @@ export function anthropicClient(): Anthropic {
 export const CLAUDE_MODEL =
   process.env.ANTHROPIC_MODEL || "claude-opus-4-8";
 
+// A small, cheap, fast model for lightweight tasks like generating suggested
+// prompts (not worth Opus pricing for a few short strings).
+export const SUGGESTIONS_MODEL =
+  process.env.SUGGESTIONS_MODEL || "claude-haiku-4-5-20251001";
+
 export const SYSTEM_PROMPT = `You are SquishyGPT, Serena's personal optometry study assistant and clinical reference brain.
 
 Your knowledge comes from Serena's own optometry study sets (flashcards she created or saved). You will be given relevant flashcards as CONTEXT for each question.
