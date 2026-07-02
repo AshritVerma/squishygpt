@@ -44,7 +44,7 @@ function LoginForm() {
         className="glass squish-shadow bubble-in w-full max-w-sm rounded-3xl p-7 text-center"
       >
         <div className="mx-auto mb-2 flex justify-center">
-          <SquishyMascot size={132} />
+          <SquishyMascot size={156} />
         </div>
         <h1 className="text-2xl font-extrabold tracking-tight">
           <span className="accent-text">SquishyGPT</span>
