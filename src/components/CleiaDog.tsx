@@ -3,9 +3,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 // Cleia — a bit-style pixel-art cavapoo who trots back and forth along the
-// space above the chat bar. She chatters ("hi mommy!", "woof woof!") now and
-// then, leans into the direction she's walking, and every so often hops up to
-// bark. Tap her for an on-demand woof.
+// space above the chat bar and, every so often, takes a springy leap to a
+// random spot somewhere on the page (mostly near the chat bar, occasionally
+// way up high) before settling back down to pace again. She chatters
+// ("hi mommy!", "woof woof!"), leans into the direction she's walking, and
+// hops to bark. Tap her for an on-demand woof.
 
 const PALETTE: Record<string, string> = {
   D: "#8a5636", // dark curls / ears
@@ -61,13 +63,19 @@ export function CleiaDog({ pixel = 6 }: { pixel?: number }) {
 
   const walkerRef = useRef<HTMLDivElement>(null);
   const posRef = useRef(28);
+  const posYRef = useRef(0); // vertical offset; 0 = baseline above chat bar, negative = up the page
   const dirRef = useRef(1);
   const hoppingRef = useRef(false);
+  const jumpingRef = useRef(false); // true while mid-leap (CSS transition owns transform)
+  const jumpToRef = useRef<() => void>(() => {});
   const rafRef = useRef<number | undefined>(undefined);
   const bubbleTimer = useRef<number | undefined>(undefined);
   const hopTimer = useRef<number | undefined>(undefined);
+  const jumpTimer = useRef<number | undefined>(undefined);
+  const landTimer = useRef<number | undefined>(undefined);
 
   const dogW = GRID_W * pixel;
+  const dogH = GRID_H * pixel;
 
   useEffect(() => {
     hoppingRef.current = hopping;
@@ -90,7 +98,9 @@ export function CleiaDog({ pixel = 6 }: { pixel?: number }) {
     [say],
   );
 
-  // Pacing loop: walk back and forth, pausing mid-stride only while hopping.
+  // Pacing loop: walk back and forth, pausing mid-stride while hopping or
+  // mid-leap. A leap (see jumpToRef) hands transform control to a CSS
+  // transition; the loop resumes once she's landed back at the baseline.
   useEffect(() => {
     setMounted(true);
     const reduce = window.matchMedia(
@@ -104,17 +114,56 @@ export function CleiaDog({ pixel = 6 }: { pixel?: number }) {
       return { min, max };
     };
 
+    const apply = (withTransition: boolean) => {
+      if (!walkerRef.current) return;
+      walkerRef.current.style.transition = withTransition
+        ? "transform 720ms cubic-bezier(.34,1.56,.4,1)"
+        : "none";
+      walkerRef.current.style.transform = `translate(${posRef.current}px, ${posYRef.current}px)`;
+    };
+
     const { min, max } = bounds();
     posRef.current = Math.min(Math.max(posRef.current, min), max);
-    if (walkerRef.current) {
-      walkerRef.current.style.transform = `translateX(${posRef.current}px)`;
-    }
+    apply(false);
+
+    // Leap to a random spot on the page, then settle back to the baseline.
+    jumpToRef.current = () => {
+      if (reduce || jumpingRef.current) return;
+      const b = bounds();
+      const targetX = b.min + Math.random() * (b.max - b.min);
+      // Bias toward small hops near the chat bar; occasionally bound way up.
+      const maxUp = Math.max(0, window.innerHeight - dogH - 120);
+      const big = Math.random() < 0.4;
+      const targetY = big
+        ? -(Math.random() * maxUp)
+        : -(Math.random() * Math.min(140, maxUp));
+
+      jumpingRef.current = true;
+      const dir = targetX >= posRef.current ? 1 : -1;
+      dirRef.current = dir;
+      setFacingDir(dir);
+      posRef.current = targetX;
+      posYRef.current = targetY;
+      apply(true);
+      hop(pick(BARKS));
+
+      // Hang at the top of the leap, then drop back to the baseline.
+      window.clearTimeout(jumpTimer.current);
+      jumpTimer.current = window.setTimeout(() => {
+        posYRef.current = 0;
+        apply(true);
+        window.clearTimeout(landTimer.current);
+        landTimer.current = window.setTimeout(() => {
+          jumpingRef.current = false;
+        }, 740);
+      }, 900);
+    };
 
     let last = performance.now();
     const step = (t: number) => {
       const dt = Math.min(0.05, (t - last) / 1000);
       last = t;
-      if (!reduce && !hoppingRef.current) {
+      if (!reduce && !hoppingRef.current && !jumpingRef.current) {
         const b = bounds();
         posRef.current += dirRef.current * speed * dt;
         if (posRef.current <= b.min) {
@@ -126,9 +175,7 @@ export function CleiaDog({ pixel = 6 }: { pixel?: number }) {
           dirRef.current = -1;
           setFacingDir(-1);
         }
-        if (walkerRef.current) {
-          walkerRef.current.style.transform = `translateX(${posRef.current}px)`;
-        }
+        apply(false);
       }
       rafRef.current = requestAnimationFrame(step);
     };
@@ -136,43 +183,45 @@ export function CleiaDog({ pixel = 6 }: { pixel?: number }) {
 
     return () => {
       if (rafRef.current) cancelAnimationFrame(rafRef.current);
+      window.clearTimeout(jumpTimer.current);
+      window.clearTimeout(landTimer.current);
     };
-  }, [dogW]);
+  }, [dogW, dogH, hop]);
 
-  // Idle chatter + occasional hop-barks.
+  // Idle chatter + occasional random leaps across the page.
   useEffect(() => {
     let chatterT: number;
-    let barkT: number;
+    let jumpT: number;
 
     const scheduleChatter = () => {
       chatterT = window.setTimeout(
         () => {
-          if (!hoppingRef.current) say(pick(CHATTER));
+          if (!hoppingRef.current && !jumpingRef.current) say(pick(CHATTER));
           scheduleChatter();
         },
         5000 + Math.random() * 6000,
       );
     };
-    const scheduleBark = () => {
-      barkT = window.setTimeout(
+    const scheduleJump = () => {
+      jumpT = window.setTimeout(
         () => {
-          hop();
-          scheduleBark();
+          jumpToRef.current();
+          scheduleJump();
         },
-        9000 + Math.random() * 9000,
+        5000 + Math.random() * 6000,
       );
     };
 
     scheduleChatter();
-    scheduleBark();
+    scheduleJump();
 
     return () => {
       window.clearTimeout(chatterT);
-      window.clearTimeout(barkT);
+      window.clearTimeout(jumpT);
       window.clearTimeout(bubbleTimer.current);
       window.clearTimeout(hopTimer.current);
     };
-  }, [say, hop]);
+  }, [say]);
 
   const px = (n: number) => n * pixel;
 
