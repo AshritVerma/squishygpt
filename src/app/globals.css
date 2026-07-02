@@ -406,6 +406,50 @@ body::before {
   animation: twinkle 2.6s ease-in-out infinite;
 }
 
+/* ---- Cleia the pixel cavapoo ---- */
+/* Slide in/out from the bottom of the screen */
+.cleia-wrap {
+  transition: transform 520ms var(--spring);
+}
+.cleia-hidden {
+  transform: translateY(150%);
+}
+.cleia-shown {
+  transform: translateY(0);
+}
+/* Idle bob while she's visiting */
+@keyframes cleia-bob {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(-4px); }
+}
+.cleia-bob {
+  animation: cleia-bob 1.7s ease-in-out infinite;
+}
+/* Excited hop on tap */
+@keyframes cleia-hop {
+  0%, 100% { transform: translateY(0); }
+  30%      { transform: translateY(-18px); }
+  55%      { transform: translateY(0); }
+  72%      { transform: translateY(-8px); }
+}
+.cleia-hop {
+  animation: cleia-hop 0.6s ease-in-out;
+}
+/* Wagging tail */
+@keyframes cleia-wag {
+  0%, 100% { transform: rotate(-20deg); }
+  50%      { transform: rotate(22deg); }
+}
+.cleia-wag {
+  transform-box: fill-box;
+  transform-origin: 0% 100%;
+  animation: cleia-wag 0.42s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cleia-bob, .cleia-hop, .cleia-wag { animation: none; }
+}
+
 /* Respect user motion preferences: kill the showy loops, keep static styles. */
 @media (prefers-reduced-motion: reduce) {
   body::before { animation: none; }
