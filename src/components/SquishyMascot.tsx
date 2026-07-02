@@ -30,6 +30,13 @@ export function SquishyMascot({
   const wrapRef = useRef<HTMLDivElement>(null);
   const pupilsRef = useRef<SVGGElement>(null);
   const [waving, setWaving] = useState(false);
+  const [wiggling, setWiggling] = useState(false);
+  const [idleTalking, setIdleTalking] = useState(false);
+
+  // When left to its own devices, Squishy stays lively: it periodically
+  // "chatters" (mouth moves), wiggles, or waves.
+  const effectiveMood: MascotMood =
+    mood !== "idle" ? mood : idleTalking ? "talking" : "idle";
 
   // Eye behaviour: thinking looks up-left; otherwise track pointer / wander.
   useEffect(() => {
@@ -99,23 +106,56 @@ export function SquishyMascot({
     };
   }, [interactive, mood]);
 
-  // Wave periodically, and on tap.
+  // Idle chatter: randomly talk, wiggle, or wave when not busy in a chat turn.
   useEffect(() => {
-    const id = setInterval(() => triggerWave(), 6500);
-    return () => clearInterval(id);
-  }, []);
+    if (mood !== "idle") return;
+    let timer: number;
+    const schedule = () => {
+      timer = window.setTimeout(
+        () => {
+          const r = Math.random();
+          if (r < 0.5) {
+            setIdleTalking(true);
+            window.setTimeout(
+              () => setIdleTalking(false),
+              1200 + Math.random() * 1200,
+            );
+          } else if (r < 0.8) {
+            triggerWiggle();
+          } else {
+            triggerWave();
+          }
+          schedule();
+        },
+        2800 + Math.random() * 4000,
+      );
+    };
+    schedule();
+    return () => window.clearTimeout(timer);
+  }, [mood]);
 
   function triggerWave() {
     setWaving(false);
-    // restart the animation on next frame
     requestAnimationFrame(() => setWaving(true));
     window.setTimeout(() => setWaving(false), 1700);
+  }
+
+  function triggerWiggle() {
+    setWiggling(false);
+    requestAnimationFrame(() => setWiggling(true));
+    window.setTimeout(() => setWiggling(false), 720);
+  }
+
+  function onTap() {
+    // A tap makes Squishy react with both a wave and a wiggle.
+    triggerWave();
+    triggerWiggle();
   }
 
   return (
     <div
       ref={wrapRef}
-      className="relative inline-flex select-none items-center justify-center"
+      className="mascot-float relative inline-flex select-none items-center justify-center"
       style={{ width: size, height: size }}
     >
       {greeting && (
@@ -131,8 +171,8 @@ export function SquishyMascot({
         viewBox="0 0 200 200"
         width={size}
         height={size}
-        className="mascot-float cursor-pointer overflow-visible"
-        onClick={triggerWave}
+        className={`cursor-pointer overflow-visible ${wiggling ? "mascot-wiggle" : ""}`}
+        onClick={onTap}
         role="img"
         aria-label="Squishy the optometry brain mascot"
       >
@@ -283,8 +323,8 @@ export function SquishyMascot({
           />
         </g>
 
-        {/* mouth: talks while streaming, smiles otherwise */}
-        {mood === "talking" ? (
+        {/* mouth: talks while streaming or chattering, smiles otherwise */}
+        {effectiveMood === "talking" ? (
           <ellipse
             className="mascot-mouth"
             cx="100"

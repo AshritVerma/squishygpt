@@ -76,3 +76,32 @@ export async function listSets(): Promise<SetSummary[]> {
 export async function deleteSet(id: number): Promise<void> {
   await query("DELETE FROM sets WHERE id = $1", [id]);
 }
+
+export interface SetCard {
+  id: number;
+  term: string;
+  definition: string;
+}
+
+export interface SetDetail {
+  id: number;
+  title: string;
+  source_url: string | null;
+  created_at: string;
+  cards: SetCard[];
+}
+
+export async function getSet(id: number): Promise<SetDetail | null> {
+  const [set] = await query<{
+    id: number;
+    title: string;
+    source_url: string | null;
+    created_at: string;
+  }>("SELECT id, title, source_url, created_at FROM sets WHERE id = $1", [id]);
+  if (!set) return null;
+  const cards = await query<SetCard>(
+    "SELECT id, term, definition FROM cards WHERE set_id = $1 ORDER BY id",
+    [id],
+  );
+  return { ...set, cards };
+}

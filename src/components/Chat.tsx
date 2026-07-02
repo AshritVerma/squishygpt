@@ -362,7 +362,7 @@ export function Chat() {
           {messages.length === 0 ? (
             <div className="mt-10 flex flex-col items-center text-center sm:mt-20">
               <div className="mb-3">
-                <SquishyMascot size={168} greeting="Hi Squishy! 👋" />
+                <SquishyMascot size={216} greeting="Hi Squishy! 👋" />
               </div>
               <h2 className="text-xl font-bold">Your optometry brain is ready</h2>
               <p className="mt-1 max-w-sm text-sm text-[var(--muted)]">

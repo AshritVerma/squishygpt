@@ -1,8 +1,10 @@
 "use client";
 
+import { useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { SquishyMascot, MascotMood } from "./SquishyMascot";
+import { SetModal } from "./SetModal";
 
 export interface Source {
   setId: number;
@@ -26,6 +28,7 @@ export function MessageBubble({
   mood?: MascotMood;
 }) {
   const isUser = message.role === "user";
+  const [openSetId, setOpenSetId] = useState<number | null>(null);
 
   return (
     <div
@@ -35,7 +38,7 @@ export function MessageBubble({
     >
       {!isUser && (
         <div className="bubble-in -mb-1 shrink-0">
-          <SquishyMascot size={44} interactive={false} mood={mood} />
+          <SquishyMascot size={52} interactive={false} mood={mood} />
         </div>
       )}
       <div
@@ -68,21 +71,40 @@ export function MessageBubble({
         )}
 
         {!isUser && message.sources && message.sources.length > 0 && (
-          <div className="mt-3 flex flex-wrap gap-1.5 border-t border-[var(--border)] pt-2.5">
+          <div className="mt-3 flex flex-wrap items-center gap-1.5 border-t border-[var(--border)] pt-2.5">
             <span className="text-xs font-medium text-[var(--muted)]">
               From your sets:
             </span>
             {message.sources.map((s) => (
-              <span
+              <button
                 key={s.setId}
-                className="rounded-full bg-[var(--accent)]/12 px-2 py-0.5 text-xs font-medium text-[var(--accent)]"
+                onClick={() => setOpenSetId(s.setId)}
+                title={`Open "${s.setTitle}"`}
+                className="spring inline-flex items-center gap-1 rounded-full bg-[var(--accent)]/12 px-2 py-0.5 text-xs font-medium text-[var(--accent)] transition hover:bg-[var(--accent)]/25"
               >
                 {s.setTitle}
-              </span>
+                <svg
+                  width="11"
+                  height="11"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <path d="M7 17 17 7" />
+                  <path d="M7 7h10v10" />
+                </svg>
+              </button>
             ))}
           </div>
         )}
       </div>
+
+      {openSetId != null && (
+        <SetModal setId={openSetId} onClose={() => setOpenSetId(null)} />
+      )}
     </div>
   );
 }
