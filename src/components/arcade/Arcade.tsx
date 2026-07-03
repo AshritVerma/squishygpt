@@ -3,27 +3,62 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { RunnerGame } from "./RunnerGame";
 import { CatchGame } from "./CatchGame";
+import { FlappyGame } from "./FlappyGame";
+import { FocusGame } from "./FocusGame";
 import { fetchClientState, pushClientState } from "@/lib/clientState";
+import type { GameProps } from "./types";
 
-type Game = "menu" | "runner" | "catch";
+const GAMES = [
+  {
+    id: "runner",
+    title: "Cleia Runner",
+    blurb: "Hop over the eye charts. Tap to jump.",
+    Component: RunnerGame,
+  },
+  {
+    id: "catch",
+    title: "Treat Catch",
+    blurb: "Slide Cleia to catch treats, dodge grapes.",
+    Component: CatchGame,
+  },
+  {
+    id: "flappy",
+    title: "Cleia Flappy",
+    blurb: "Flap through the phoropter towers. Tap to fly.",
+    Component: FlappyGame,
+  },
+  {
+    id: "focus",
+    title: "Focus Ring",
+    blurb: "Tap the instant the chart snaps sharp.",
+    Component: FocusGame,
+  },
+] as const satisfies readonly {
+  id: string;
+  title: string;
+  blurb: string;
+  Component: (props: GameProps) => React.ReactNode;
+}[];
+
+type GameId = (typeof GAMES)[number]["id"];
+type Screen = "menu" | GameId;
 
 const ARCADE_STATE_KEY = "arcade";
 
-interface ArcadeBests {
-  runner: number;
-  catch: number;
-}
+type ArcadeBests = Record<GameId, number>;
 
-const bestKey = (g: "runner" | "catch") => `squishygpt.arcade.${g}`;
+const GAME_IDS = GAMES.map((g) => g.id) as GameId[];
 
-function readBest(g: "runner" | "catch"): number {
+const bestKey = (g: GameId) => `squishygpt.arcade.${g}`;
+
+function readBest(g: GameId): number {
   try {
     return parseInt(localStorage.getItem(bestKey(g)) || "0", 10) || 0;
   } catch {
     return 0;
   }
 }
-function writeBest(g: "runner" | "catch", score: number) {
+function writeBest(g: GameId, score: number) {
   try {
     localStorage.setItem(bestKey(g), String(score));
   } catch {
@@ -31,52 +66,42 @@ function writeBest(g: "runner" | "catch", score: number) {
   }
 }
 
+function readLocalBests(): ArcadeBests {
+  return Object.fromEntries(
+    GAME_IDS.map((g) => [g, readBest(g)]),
+  ) as ArcadeBests;
+}
+
 // Merge local and server high scores (max wins), write back to both sides.
 // Also called from Chat on page load so scores sync without opening the arcade.
 export async function syncArcadeBests(): Promise<ArcadeBests> {
-  const local: ArcadeBests = {
-    runner: readBest("runner"),
-    catch: readBest("catch"),
-  };
-  const remote = await fetchClientState<ArcadeBests>(ARCADE_STATE_KEY);
-  const merged: ArcadeBests = {
-    runner: Math.max(local.runner, remote?.runner || 0),
-    catch: Math.max(local.catch, remote?.catch || 0),
-  };
-  writeBest("runner", merged.runner);
-  writeBest("catch", merged.catch);
+  const local = readLocalBests();
+  const remote = await fetchClientState<Partial<ArcadeBests>>(ARCADE_STATE_KEY);
+  const merged = Object.fromEntries(
+    GAME_IDS.map((g) => [g, Math.max(local[g], remote?.[g] || 0)]),
+  ) as ArcadeBests;
+  for (const g of GAME_IDS) writeBest(g, merged[g]);
   const serverBehind =
-    !remote ||
-    merged.runner > (remote.runner || 0) ||
-    merged.catch > (remote.catch || 0);
-  if (serverBehind && (merged.runner > 0 || merged.catch > 0)) {
+    !remote || GAME_IDS.some((g) => merged[g] > (remote[g] || 0));
+  if (serverBehind && GAME_IDS.some((g) => merged[g] > 0)) {
     pushClientState(ARCADE_STATE_KEY, merged);
   }
   return merged;
 }
 
-// Cleia's Arcade — a full-screen overlay with two canvas mini games. Hides the
+// Cleia's Arcade — a full-screen overlay with canvas mini games. Hides the
 // ambient Cleia while open (via the squishy:arcade event) so there's only one.
 export function Arcade({ onClose }: { onClose: () => void }) {
-  const [game, setGame] = useState<Game>("menu");
-  const [bestRunner, setBestRunner] = useState(0);
-  const [bestCatch, setBestCatch] = useState(0);
-  const bestsRef = useRef<ArcadeBests>({ runner: 0, catch: 0 });
-
-  // High scores: show local instantly, then merge the server copy (max wins)
+  const [screen, setScreen] = useState<Screen>("menu");
+  // Local bests show instantly; the server copy is merged in below (max wins)
   // so bests carry across devices/domains.
+  const [bests, setBests] = useState<ArcadeBests>(readLocalBests);
+  const bestsRef = useRef<ArcadeBests>(bests);
+
   useEffect(() => {
-    const local: ArcadeBests = {
-      runner: readBest("runner"),
-      catch: readBest("catch"),
-    };
-    bestsRef.current = local;
-    setBestRunner(local.runner);
-    setBestCatch(local.catch);
     syncArcadeBests().then((merged) => {
       bestsRef.current = merged;
-      setBestRunner(merged.runner);
-      setBestCatch(merged.catch);
+      setBests(merged);
     });
   }, []);
 
@@ -96,31 +121,31 @@ export function Arcade({ onClose }: { onClose: () => void }) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== "Escape") return;
-      if (game !== "menu") setGame("menu");
+      if (screen !== "menu") setScreen("menu");
       else onClose();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [game, onClose]);
+  }, [screen, onClose]);
 
   const reduce =
     typeof window !== "undefined" &&
     window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
   const onGameOver = useCallback(
-    (which: "runner" | "catch", score: number) => {
-      const cur = which === "runner" ? bestRunner : bestCatch;
-      if (score > cur) {
-        if (which === "runner") setBestRunner(score);
-        else setBestCatch(score);
-        writeBest(which, score);
-        bestsRef.current = { ...bestsRef.current, [which]: score };
-        pushClientState(ARCADE_STATE_KEY, bestsRef.current);
-        if (!reduce) window.dispatchEvent(new Event("squishy:confetti"));
-      }
+    (which: GameId, score: number) => {
+      if (score <= bestsRef.current[which]) return;
+      const next = { ...bestsRef.current, [which]: score };
+      bestsRef.current = next;
+      setBests(next);
+      writeBest(which, score);
+      pushClientState(ARCADE_STATE_KEY, next);
+      if (!reduce) window.dispatchEvent(new Event("squishy:confetti"));
     },
-    [bestRunner, bestCatch, reduce],
+    [reduce],
   );
+
+  const active = GAMES.find((g) => g.id === screen);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3">
@@ -129,9 +154,9 @@ export function Arcade({ onClose }: { onClose: () => void }) {
         {/* Header */}
         <div className="flex items-center justify-between gap-2 border-b border-[var(--border)] px-4 py-3">
           <div className="flex items-center gap-2">
-            {game !== "menu" && (
+            {screen !== "menu" && (
               <button
-                onClick={() => setGame("menu")}
+                onClick={() => setScreen("menu")}
                 aria-label="Back to arcade menu"
                 className="spring rounded-full px-2 py-1 text-[var(--muted)] transition hover:bg-[var(--accent)]/10 hover:text-[var(--accent)]"
               >
@@ -140,11 +165,7 @@ export function Arcade({ onClose }: { onClose: () => void }) {
             )}
             <h2 className="text-sm font-extrabold tracking-tight">
               <span className="accent-text">
-                {game === "runner"
-                  ? "Cleia Runner"
-                  : game === "catch"
-                    ? "Treat Catch"
-                    : "Cleia's Arcade"}
+                {active ? active.title : "Cleia's Arcade"}
               </span>
             </h2>
           </div>
@@ -158,51 +179,34 @@ export function Arcade({ onClose }: { onClose: () => void }) {
         </div>
 
         {/* Body */}
-        {game === "menu" ? (
+        {!active ? (
           <div className="flex flex-1 flex-col gap-3 overflow-y-auto p-4">
             <p className="text-center text-xs text-[var(--muted)]">
               Take a quick break with Cleia. 🐾
             </p>
-            <button
-              onClick={() => setGame("runner")}
-              className="glass glow-hover squish-shadow flex items-center justify-between rounded-2xl px-4 py-4 text-left"
-            >
-              <span>
-                <span className="block font-bold">Cleia Runner</span>
-                <span className="block text-xs text-[var(--muted)]">
-                  Hop over the eye charts. Tap to jump.
+            {GAMES.map((g) => (
+              <button
+                key={g.id}
+                onClick={() => setScreen(g.id)}
+                className="glass glow-hover squish-shadow flex items-center justify-between rounded-2xl px-4 py-4 text-left"
+              >
+                <span>
+                  <span className="block font-bold">{g.title}</span>
+                  <span className="block text-xs text-[var(--muted)]">
+                    {g.blurb}
+                  </span>
                 </span>
-              </span>
-              <span className="shrink-0 text-xs font-semibold text-[var(--accent)]">
-                Best {bestRunner}
-              </span>
-            </button>
-            <button
-              onClick={() => setGame("catch")}
-              className="glass glow-hover squish-shadow flex items-center justify-between rounded-2xl px-4 py-4 text-left"
-            >
-              <span>
-                <span className="block font-bold">Treat Catch</span>
-                <span className="block text-xs text-[var(--muted)]">
-                  Slide Cleia to catch treats, dodge grapes.
+                <span className="shrink-0 text-xs font-semibold text-[var(--accent)]">
+                  Best {bests[g.id]}
                 </span>
-              </span>
-              <span className="shrink-0 text-xs font-semibold text-[var(--accent)]">
-                Best {bestCatch}
-              </span>
-            </button>
+              </button>
+            ))}
           </div>
-        ) : game === "runner" ? (
-          <RunnerGame
-            best={bestRunner}
-            onGameOver={(s) => onGameOver("runner", s)}
-            onExit={() => setGame("menu")}
-          />
         ) : (
-          <CatchGame
-            best={bestCatch}
-            onGameOver={(s) => onGameOver("catch", s)}
-            onExit={() => setGame("menu")}
+          <active.Component
+            best={bests[active.id]}
+            onGameOver={(s) => onGameOver(active.id, s)}
+            onExit={() => setScreen("menu")}
           />
         )}
       </div>
