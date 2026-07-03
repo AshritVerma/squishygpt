@@ -9,6 +9,7 @@ import { FloatingDoodles } from "./FloatingDoodles";
 import { Confetti } from "./Confetti";
 import { Arcade, syncArcadeBests } from "./arcade/Arcade";
 import { fetchClientState, pushClientState } from "@/lib/clientState";
+import { QUESTION_COUNT_KEY, mascotLevel } from "@/lib/milestones";
 
 const DEFAULT_SUGGESTIONS = [
   "Differentials for a painful red eye",
@@ -19,7 +20,6 @@ const DEFAULT_SUGGESTIONS = [
 
 const SUG_KEY = "squishygpt.suggestions.v1";
 const SUG_TTL = 1000 * 60 * 60 * 4; // refresh personalized prompts every 4h
-const COUNT_KEY = "squishygpt.questions.v1"; // total questions asked (for milestones)
 const FACT_KEY = "squishygpt.factdismissed.v1"; // date-stamped so it returns daily
 
 // Tiny delightful eye facts, one shown per day on the empty state.
@@ -308,12 +308,33 @@ export function Chat() {
       window.dispatchEvent(new Event("squishy:feral"));
     }
 
-    // Milestone: confetti + a proud Cleia every 50th question.
+    // "20/20" anywhere in a question gives Squishy star eyes + confetti.
+    if (/\b20\s*\/\s*20\b/.test(question)) {
+      window.dispatchEvent(new Event("squishy:2020"));
+      window.dispatchEvent(new Event("squishy:confetti"));
+    }
+
+    // Complimenting the brain makes it bashful.
+    if (
+      /\b(good\s+(job|work|brain)|smart\s+(brain|squishy)|so\s+smart|thank\s+(you|u)|thanks|thx)\b/i.test(
+        question,
+      )
+    ) {
+      window.dispatchEvent(new Event("squishy:bashful"));
+    }
+
+    // Milestones: confetti + a proud Cleia every 50th question, and Squishy
+    // evolves (cap at 250, stethoscope at 500 — see lib/milestones).
     try {
       const n =
-        (parseInt(localStorage.getItem(COUNT_KEY) || "0", 10) || 0) + 1;
-      localStorage.setItem(COUNT_KEY, String(n));
+        (parseInt(localStorage.getItem(QUESTION_COUNT_KEY) || "0", 10) || 0) +
+        1;
+      localStorage.setItem(QUESTION_COUNT_KEY, String(n));
       if (n % 50 === 0) window.dispatchEvent(new Event("squishy:confetti"));
+      if (mascotLevel(n) > mascotLevel(n - 1)) {
+        window.dispatchEvent(new Event("squishy:milestone"));
+        window.dispatchEvent(new Event("squishy:confetti"));
+      }
     } catch {
       /* counting is best-effort */
     }
