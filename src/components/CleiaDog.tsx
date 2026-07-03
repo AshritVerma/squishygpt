@@ -58,6 +58,17 @@ const HEART_GLASSES: [number, number][] = [
 ];
 const GLASSES_PINK = "#ff5fa2";
 
+// Round rims she wears after swiping Squishy's glasses: a ring around each
+// eye plus a bridge, in the same dark purple as Squishy's frames.
+const STOLEN_GLASSES: [number, number][] = [
+  [3, 5], [4, 5], [5, 5], [2, 6], [6, 6], [2, 7], [6, 7], [3, 8], [4, 8], [5, 8],
+  [9, 5], [10, 5], [11, 5], [8, 6], [12, 6], [8, 7], [12, 7], [9, 8], [10, 8], [11, 8],
+  [7, 6],
+];
+const GLASSES_PURPLE = "#46145a";
+// How long she keeps them before giving them back.
+const STEAL_MS = 10000;
+
 type Accessory = "santa" | "party" | "hearts" | null;
 
 function accessoryForToday(): Accessory {
@@ -131,6 +142,10 @@ export function CleiaDog({ pixel = 6 }: { pixel?: number }) {
   const [ball, setBall] = useState<{ x: number; y: number } | null>(null);
   const [sitting, setSitting] = useState(false);
   const [arcadeOpen, setArcadeOpen] = useState(false);
+  const [stolenGlasses, setStolenGlasses] = useState(false);
+  const stealingRef = useRef(false);
+  const stealTimers = useRef<number[]>([]);
+  const stealRef = useRef<() => void>(() => {});
   const tapTimes = useRef<number[]>([]);
 
   const walkerRef = useRef<HTMLDivElement>(null);
@@ -217,6 +232,52 @@ export function CleiaDog({ pixel = 6 }: { pixel?: number }) {
   const stopPet = useCallback(() => {
     setPetting(false);
     window.clearInterval(heartTimer.current);
+  }, []);
+
+  // Rare mischief: swipe Squishy's glasses, wear them for a bit, give them
+  // back. Squishy squints and protests via the squishy:glasses event.
+  const stealGlasses = useCallback(() => {
+    if (stealingRef.current || nappingRef.current || pettingRef.current) return;
+    stealingRef.current = true;
+    setStolenGlasses(true);
+    window.dispatchEvent(
+      new CustomEvent("squishy:glasses", { detail: { stolen: true } }),
+    );
+    hop("hehehe!! 👓");
+    stealTimers.current = [
+      window.setTimeout(() => say("i'm smart now!!"), STEAL_MS * 0.45),
+      window.setTimeout(() => {
+        setStolenGlasses(false);
+        window.dispatchEvent(
+          new CustomEvent("squishy:glasses", { detail: { stolen: false } }),
+        );
+        say("fiiine, here you go");
+        stealingRef.current = false;
+      }, STEAL_MS),
+    ];
+  }, [hop, say]);
+  useEffect(() => {
+    stealRef.current = stealGlasses;
+  }, [stealGlasses]);
+  useEffect(
+    () => () => {
+      for (const t of stealTimers.current) window.clearTimeout(t);
+    },
+    [],
+  );
+
+  // Nap sync: let Squishy (and anyone else) know when she dozes off or wakes.
+  useEffect(() => {
+    window.dispatchEvent(
+      new CustomEvent("squishy:nap", { detail: { open: napping } }),
+    );
+  }, [napping]);
+
+  // The steal can also be requested explicitly (previews, tests).
+  useEffect(() => {
+    const onSteal = () => stealRef.current();
+    window.addEventListener("squishy:steal-request", onSteal);
+    return () => window.removeEventListener("squishy:steal-request", onSteal);
   }, []);
 
   // Pacing loop: walk back and forth, pausing mid-stride while hopping or
@@ -390,8 +451,11 @@ export function CleiaDog({ pixel = 6 }: { pixel?: number }) {
             !jumpingRef.current &&
             !nappingRef.current &&
             !pettingRef.current
-          )
-            say(pick(chatterPool()));
+          ) {
+            // Roughly 1-in-50 chatter ticks she steals Squishy's glasses.
+            if (Math.random() < 0.02) stealRef.current();
+            else say(pick(chatterPool()));
+          }
           scheduleChatter();
         },
         5000 + Math.random() * 6000,
@@ -487,6 +551,10 @@ export function CleiaDog({ pixel = 6 }: { pixel?: number }) {
     setBirthdayMode(bday);
     if (bday) setBubble("HAPPY BIRTHDAY MOMMY!! 🎂🎉");
     if (o === "nap") setNapping(true);
+    if (o === "steal") {
+      const t = window.setTimeout(() => stealRef.current(), 700);
+      return () => window.clearTimeout(t);
+    }
     if (o === "feral") {
       const t = window.setTimeout(
         () => window.dispatchEvent(new Event("squishy:feral")),
@@ -769,6 +837,21 @@ export function CleiaDog({ pixel = 6 }: { pixel?: number }) {
                       fill={GLASSES_PINK}
                     />
                   ))}
+                {/* Squishy's stolen glasses */}
+                {stolenGlasses && (
+                  <g data-cleia-glasses>
+                    {STOLEN_GLASSES.map(([x, y]) => (
+                      <rect
+                        key={`sg${x}-${y}`}
+                        x={x}
+                        y={y}
+                        width={1}
+                        height={1}
+                        fill={GLASSES_PURPLE}
+                      />
+                    ))}
+                  </g>
+                )}
               </svg>
             </button>
           </div>
