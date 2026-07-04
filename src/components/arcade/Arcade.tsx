@@ -6,6 +6,7 @@ import { CatchGame } from "./CatchGame";
 import { FlappyGame } from "./FlappyGame";
 import { FocusGame } from "./FocusGame";
 import { fetchClientState, pushClientState } from "@/lib/clientState";
+import { track } from "@/lib/analyticsClient";
 import type { GameProps } from "./types";
 
 const GAMES = [
@@ -107,6 +108,7 @@ export function Arcade({ onClose }: { onClose: () => void }) {
 
   // Tell the ambient Cleia to step aside while the arcade is open.
   useEffect(() => {
+    track("arcade_opened");
     window.dispatchEvent(
       new CustomEvent("squishy:arcade", { detail: { open: true } }),
     );
@@ -132,8 +134,14 @@ export function Arcade({ onClose }: { onClose: () => void }) {
     typeof window !== "undefined" &&
     window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
+  const startGame = useCallback((id: GameId) => {
+    track("arcade_game_started", { game: id });
+    setScreen(id);
+  }, []);
+
   const onGameOver = useCallback(
     (which: GameId, score: number) => {
+      track("arcade_game_over", { game: which, score });
       if (score <= bestsRef.current[which]) return;
       const next = { ...bestsRef.current, [which]: score };
       bestsRef.current = next;
@@ -187,7 +195,7 @@ export function Arcade({ onClose }: { onClose: () => void }) {
             {GAMES.map((g) => (
               <button
                 key={g.id}
-                onClick={() => setScreen(g.id)}
+                onClick={() => startGame(g.id)}
                 className="glass glow-hover squish-shadow flex items-center justify-between rounded-2xl px-4 py-4 text-left"
               >
                 <span>

@@ -10,6 +10,7 @@ import { Confetti } from "./Confetti";
 import { Arcade, syncArcadeBests } from "./arcade/Arcade";
 import { fetchClientState, pushClientState } from "@/lib/clientState";
 import { QUESTION_COUNT_KEY, mascotLevel } from "@/lib/milestones";
+import { track } from "@/lib/analyticsClient";
 
 const DEFAULT_SUGGESTIONS = [
   "Differentials for a painful red eye",
@@ -250,6 +251,7 @@ export function Chat() {
   }, [messages, convId]);
 
   function newChat() {
+    track("new_chat");
     setMessages([]);
     setConvId(uid());
     setPanelOpen(false);
@@ -257,12 +259,14 @@ export function Chat() {
 
   function loadConvo(c: StoredConvo) {
     if (busy) return;
+    track("conversation_loaded", { messages: c.messages.length });
     setMessages(c.messages);
     setConvId(c.id);
     setPanelOpen(false);
   }
 
   function deleteConvo(id: string) {
+    track("conversation_deleted");
     setConvos((prev) => {
       const next = prev.filter((c) => c.id !== id);
       writeConvos(next);
@@ -593,7 +597,10 @@ export function Chat() {
                   {loadingSug ? "Finding what's relevant…" : "Suggested for you"}
                 </span>
                 <button
-                  onClick={() => loadSuggestions(true)}
+                  onClick={() => {
+                    track("suggestions_shuffled");
+                    loadSuggestions(true);
+                  }}
                   disabled={loadingSug}
                   aria-label="Refresh suggestions"
                   className="spring flex items-center gap-1 rounded-full px-2 py-1 text-xs text-[var(--muted)] transition hover:bg-[var(--accent)]/10 hover:text-[var(--accent)] disabled:opacity-50"
@@ -623,7 +630,10 @@ export function Chat() {
                 {suggestions.map((s, i) => (
                   <button
                     key={s}
-                    onClick={() => send(s)}
+                    onClick={() => {
+                      track("suggestion_clicked", { index: i });
+                      send(s);
+                    }}
                     style={{ animationDelay: `${120 + i * 90}ms` }}
                     className="glass glow-hover chip-in squish-shadow rounded-2xl px-4 py-3 text-left text-sm"
                   >
@@ -682,9 +692,10 @@ export function Chat() {
         <div className="mx-auto flex w-full max-w-2xl items-end gap-2">
           <VoiceButton
             disabled={busy}
-            onTranscript={(text) => {
+            onTranscript={(text, isFinal) => {
               setInput(text);
               requestAnimationFrame(autosize);
+              if (isFinal) track("voice_transcript_used", { chars: text.length });
             }}
           />
           <div className="glass squish-shadow composer flex flex-1 items-end gap-2 rounded-3xl px-3 py-2">

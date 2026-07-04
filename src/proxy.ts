@@ -19,8 +19,10 @@ export async function proxy(req: NextRequest) {
 }
 
 export const config = {
-  // Protect everything except the login page/endpoint and static assets.
+  // Protect everything except the login page/endpoint, the public cross-app
+  // analytics collector (api/ingest — write-key authed in the route itself),
+  // and static assets.
   matcher: [
-    "/((?!login|api/login|_next/static|_next/image|favicon.ico|manifest.webmanifest|icon|apple-icon|robots.txt|cursor-glasses.svg|cursor-paw.svg).*)",
+    "/((?!login|api/login|api/ingest|_next/static|_next/image|favicon.ico|manifest.webmanifest|icon|apple-icon|robots.txt|cursor-glasses.svg|cursor-paw.svg).*)",
   ],
 };

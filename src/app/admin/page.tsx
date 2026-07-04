@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { track } from "@/lib/analyticsClient";
 
 interface SetSummary {
   id: number;
@@ -111,6 +112,7 @@ export default function AdminPage() {
       setOpenId(null);
       return;
     }
+    track("study_set_viewed", { set_id: id });
     setOpenId(id);
     if (!details[id] || (details[id].cards.length === 0 && !details[id].error)) {
       loadCards(id);
