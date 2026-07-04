@@ -4,6 +4,7 @@ import "./globals.css";
 import { CleiaDog } from "@/components/CleiaDog";
 import { BlinkReveal } from "@/components/BlinkReveal";
 import { SparkleTrail } from "@/components/SparkleTrail";
+import { UsageTracker } from "@/components/UsageTracker";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -49,6 +50,7 @@ export default function RootLayout({
         {children}
         <CleiaDog />
         <SparkleTrail />
+        <UsageTracker />
       </body>
     </html>
   );

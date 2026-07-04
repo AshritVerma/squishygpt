@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { parseQuizletText } from "@/lib/quizlet";
 import { ingestSet, listSets, deleteSet } from "@/lib/sets";
+import { trackServer } from "@/lib/analytics-server";
 
 export const runtime = "nodejs";
 export const maxDuration = 120;
@@ -46,6 +47,7 @@ export async function POST(req: Request) {
 
   try {
     const result = await ingestSet(title, cards, body.sourceUrl?.trim() || undefined);
+    void trackServer("study_set_added", { cards: cards.length });
     return NextResponse.json({ ok: true, ...result });
   } catch (err) {
     console.error("Ingest error:", err);
@@ -62,5 +64,6 @@ export async function DELETE(req: Request) {
     return NextResponse.json({ error: "Invalid id" }, { status: 400 });
   }
   await deleteSet(id);
+  void trackServer("study_set_deleted", { set_id: id });
   return NextResponse.json({ ok: true });
 }

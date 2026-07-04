@@ -1,5 +1,6 @@
 import { anthropicClient, CLAUDE_MODEL, SYSTEM_PROMPT } from "@/lib/anthropic";
 import { retrieve, buildContext, uniqueSources } from "@/lib/retrieval";
+import { trackServer } from "@/lib/analytics-server";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -50,11 +51,19 @@ export async function POST(req: Request) {
   });
 
   const encoder = new TextEncoder();
+  const startedAt = Date.now();
+  let inputTokens = 0;
+  let outputTokens = 0;
+  let ok = true;
   const readable = new ReadableStream<Uint8Array>({
     async start(controller) {
       try {
         for await (const event of anthropicStream) {
-          if (
+          if (event.type === "message_start") {
+            inputTokens = event.message.usage.input_tokens ?? 0;
+          } else if (event.type === "message_delta") {
+            outputTokens = event.usage.output_tokens ?? outputTokens;
+          } else if (
             event.type === "content_block_delta" &&
             event.delta.type === "text_delta"
           ) {
@@ -62,6 +71,7 @@ export async function POST(req: Request) {
           }
         }
       } catch (err) {
+        ok = false;
         controller.enqueue(
           encoder.encode(
             "\n\n_(Sorry, something went wrong generating that answer.)_",
@@ -70,6 +80,18 @@ export async function POST(req: Request) {
         console.error("Chat stream error:", err);
       } finally {
         controller.close();
+        // Reliable server-side usage capture (can't be ad-blocked). Records
+        // shape/perf, never the question text itself.
+        void trackServer("chat_question_asked", {
+          q_len: last.content.length,
+          num_sources: sources.length,
+          source_set_ids: sources.map((s) => s.setId),
+          latency_ms: Date.now() - startedAt,
+          model: CLAUDE_MODEL,
+          input_tokens: inputTokens,
+          output_tokens: outputTokens,
+          ok,
+        });
       }
     },
   });

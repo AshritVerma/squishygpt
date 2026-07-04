@@ -42,3 +42,7 @@ CREATE TABLE IF NOT EXISTS client_state (
   value       JSONB NOT NULL,
   updated_at  TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+-- NOTE: usage analytics no longer live here. SquishyGPT forwards its events to
+-- the standalone Orbit analytics service (see src/lib/orbit.ts). No analytics
+-- tables are needed in this database.

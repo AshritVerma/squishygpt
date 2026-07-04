@@ -28,6 +28,12 @@ async function hmac(payload: string): Promise<string> {
 }
 
 export async function createSessionToken(): Promise<string> {
+  // Analytics identity migration path (see the Usage Analytics plan): when this
+  // app gains real accounts, change the payload from `ok.<ts>` to
+  // `ok.<userId>.<ts>`, expose a verified `getSessionUserId(token)` here, and
+  // have analytics-server's currentUserId() read it. Every event will then be
+  // stamped with user_id automatically; anonymous history can be reconciled via
+  // linkVisitorToUser().
   const payload = `ok.${Date.now()}`;
   const sig = await hmac(payload);
   return `${payload}.${sig}`;
