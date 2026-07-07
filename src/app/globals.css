@@ -639,6 +639,37 @@ body::before {
   animation: cleia-sleep 2.8s ease-in-out infinite;
   transform-origin: center bottom;
 }
+/* Memory Match: card flip-in */
+@keyframes memory-flip {
+  0%   { transform: rotateY(90deg) scale(0.9); }
+  100% { transform: rotateY(0) scale(1); }
+}
+.memory-card {
+  transition: transform 150ms ease;
+}
+.memory-card:active {
+  transform: scale(0.94);
+}
+.memory-flip {
+  animation: memory-flip 220ms ease-out both;
+}
+@media (prefers-reduced-motion: reduce) {
+  .memory-flip { animation: none; }
+}
+
+/* Zoomies: occupant pops out of its hole */
+@keyframes zoomies-pop {
+  0%   { transform: translateY(85%) scale(0.7); }
+  70%  { transform: translateY(-6%) scale(1.05); }
+  100% { transform: translateY(0) scale(1); }
+}
+.zoomies-pop {
+  animation: zoomies-pop 180ms cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+@media (prefers-reduced-motion: reduce) {
+  .zoomies-pop { animation: none; }
+}
+
 /* Tennis ball bounce-in when dropped for fetch */
 @keyframes ball-drop {
   0%   { opacity: 0; transform: translateY(-14px) scale(0.6); }

@@ -5,7 +5,16 @@ import { RunnerGame } from "./RunnerGame";
 import { CatchGame } from "./CatchGame";
 import { FlappyGame } from "./FlappyGame";
 import { FocusGame } from "./FocusGame";
+import { ZoomiesGame } from "./ZoomiesGame";
+import { MemoryGame } from "./MemoryGame";
+import { Shop } from "./Shop";
 import { fetchClientState, pushClientState } from "@/lib/clientState";
+import {
+  earnPoints,
+  readWallet,
+  syncWallet,
+  type Wallet,
+} from "@/lib/pawPoints";
 import type { GameProps } from "./types";
 
 const GAMES = [
@@ -33,6 +42,18 @@ const GAMES = [
     blurb: "Tap the instant the chart snaps sharp.",
     Component: FocusGame,
   },
+  {
+    id: "zoomies",
+    title: "Zoomies",
+    blurb: "Whack-a-Cleia! Tap her fast, never the grapes.",
+    Component: ZoomiesGame,
+  },
+  {
+    id: "memory",
+    title: "Memory Match",
+    blurb: "Flip the cards, find the pairs.",
+    Component: MemoryGame,
+  },
 ] as const satisfies readonly {
   id: string;
   title: string;
@@ -41,7 +62,7 @@ const GAMES = [
 }[];
 
 type GameId = (typeof GAMES)[number]["id"];
-type Screen = "menu" | GameId;
+type Screen = "menu" | "shop" | GameId;
 
 const ARCADE_STATE_KEY = "arcade";
 
@@ -97,12 +118,17 @@ export function Arcade({ onClose }: { onClose: () => void }) {
   // so bests carry across devices/domains.
   const [bests, setBests] = useState<ArcadeBests>(readLocalBests);
   const bestsRef = useRef<ArcadeBests>(bests);
+  const [wallet, setWallet] = useState<Wallet>(readWallet);
+  const [earnedToast, setEarnedToast] = useState<number | null>(null);
+  const toastTimer = useRef<number | undefined>(undefined);
 
   useEffect(() => {
     syncArcadeBests().then((merged) => {
       bestsRef.current = merged;
       setBests(merged);
     });
+    syncWallet().then(setWallet);
+    return () => window.clearTimeout(toastTimer.current);
   }, []);
 
   // Tell the ambient Cleia to step aside while the arcade is open.
@@ -134,6 +160,14 @@ export function Arcade({ onClose }: { onClose: () => void }) {
 
   const onGameOver = useCallback(
     (which: GameId, score: number) => {
+      // Every run pays out paw points equal to its score.
+      if (score > 0) {
+        setWallet(earnPoints(score));
+        setEarnedToast(score);
+        window.clearTimeout(toastTimer.current);
+        toastTimer.current = window.setTimeout(() => setEarnedToast(null), 2600);
+      }
+
       if (score <= bestsRef.current[which]) return;
       const next = { ...bestsRef.current, [which]: score };
       bestsRef.current = next;
@@ -165,22 +199,53 @@ export function Arcade({ onClose }: { onClose: () => void }) {
             )}
             <h2 className="text-sm font-extrabold tracking-tight">
               <span className="accent-text">
-                {active ? active.title : "Cleia's Arcade"}
+                {active
+                  ? active.title
+                  : screen === "shop"
+                    ? "Paw Shop"
+                    : "Cleia's Arcade"}
               </span>
             </h2>
           </div>
-          <button
-            onClick={onClose}
-            aria-label="Close arcade"
-            className="spring rounded-full px-2.5 py-1 text-[var(--muted)] transition hover:bg-[var(--accent)]/10 hover:text-[var(--accent)]"
-          >
-            ✕
-          </button>
+          <div className="flex items-center gap-1.5">
+            {screen === "menu" && (
+              <button
+                onClick={() => setScreen("shop")}
+                className="spring flex items-center gap-1 rounded-full bg-[var(--accent)]/10 px-2.5 py-1 text-xs font-bold text-[var(--accent)]"
+              >
+                {wallet.balance} 🐾
+              </button>
+            )}
+            <button
+              onClick={onClose}
+              aria-label="Close arcade"
+              className="spring rounded-full px-2.5 py-1 text-[var(--muted)] transition hover:bg-[var(--accent)]/10 hover:text-[var(--accent)]"
+            >
+              ✕
+            </button>
+          </div>
         </div>
 
+        {/* points-earned toast */}
+        {earnedToast !== null && (
+          <div className="pointer-events-none absolute left-1/2 top-14 z-10 -translate-x-1/2">
+            <div className="glass squish-shadow speech-pop rounded-full px-3 py-1 text-xs font-bold text-[var(--accent)]">
+              +{earnedToast} paw points 🐾
+            </div>
+          </div>
+        )}
+
         {/* Body */}
-        {!active ? (
-          <div className="flex flex-1 flex-col gap-3 overflow-y-auto p-4">
+        {active ? (
+          <active.Component
+            best={bests[active.id]}
+            onGameOver={(s) => onGameOver(active.id, s)}
+            onExit={() => setScreen("menu")}
+          />
+        ) : screen === "shop" ? (
+          <Shop wallet={wallet} onWalletChange={setWallet} />
+        ) : (
+          <div className="scroll-area flex flex-1 flex-col gap-3 overflow-y-auto p-4">
             <p className="text-center text-xs text-[var(--muted)]">
               Take a quick break with Cleia. 🐾
             </p>
@@ -201,13 +266,21 @@ export function Arcade({ onClose }: { onClose: () => void }) {
                 </span>
               </button>
             ))}
+            <button
+              onClick={() => setScreen("shop")}
+              className="accent-gradient glow-hover squish-shadow flex items-center justify-between rounded-2xl px-4 py-4 text-left text-white"
+            >
+              <span>
+                <span className="block font-bold">Paw Shop</span>
+                <span className="block text-xs text-white/80">
+                  Spend your points on real-life rewards 💝
+                </span>
+              </span>
+              <span className="shrink-0 text-xs font-bold">
+                {wallet.balance} 🐾
+              </span>
+            </button>
           </div>
-        ) : (
-          <active.Component
-            best={bests[active.id]}
-            onGameOver={(s) => onGameOver(active.id, s)}
-            onExit={() => setScreen("menu")}
-          />
         )}
       </div>
     </div>
