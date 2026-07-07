@@ -4,7 +4,7 @@ import { query } from "@/lib/db";
 export const runtime = "nodejs";
 
 // Small key/value sync for client state (single-user app, gated by middleware).
-const ALLOWED_KEYS = new Set(["conversations", "arcade"]);
+const ALLOWED_KEYS = new Set(["conversations", "arcade", "wallet"]);
 
 export async function GET(req: Request) {
   const key = new URL(req.url).searchParams.get("key") ?? "";
