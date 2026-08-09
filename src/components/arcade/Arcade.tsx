@@ -16,6 +16,7 @@ import {
   startGameSession,
   type Wallet,
 } from "@/lib/pawPoints";
+import { birthdayActive } from "@/lib/birthday";
 import type { GameProps } from "./types";
 
 const GAMES = [
@@ -125,6 +126,8 @@ export function Arcade({ onClose }: { onClose: () => void }) {
   // Server-issued, single-use session for the current run. Requested when a
   // game is opened (and re-primed after each payout so a retry has a fresh one).
   const sessionRef = useRef<string | null>(null);
+  // The arcade only mounts client-side, so reading the date here is safe.
+  const [bday] = useState(birthdayActive);
 
   useEffect(() => {
     syncArcadeBests().then((merged) => {
@@ -286,9 +289,13 @@ export function Arcade({ onClose }: { onClose: () => void }) {
                 className="glass glow-hover squish-shadow flex items-center justify-between rounded-2xl px-4 py-4 text-left"
               >
                 <span>
-                  <span className="block font-bold">{g.title}</span>
+                  <span className="block font-bold">
+                    {bday && g.id === "catch" ? "Cake Catch 🎂" : g.title}
+                  </span>
                   <span className="block text-xs text-[var(--muted)]">
-                    {g.blurb}
+                    {bday && g.id === "catch"
+                      ? "Birthday special: catch the cake, 2× points!"
+                      : g.blurb}
                   </span>
                 </span>
                 <span className="shrink-0 text-xs font-semibold text-[var(--accent)]">

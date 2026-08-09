@@ -7,10 +7,10 @@
 // Editing that cache — or anything client-side — does nothing to the real
 // total, because the server never trusts a balance the client sends.
 
-import { REWARDS, type Reward } from "@/lib/rewards";
+import { BIRTHDAY_REWARDS, REWARDS, type Reward } from "@/lib/rewards";
 
 export type { Reward };
-export { REWARDS };
+export { BIRTHDAY_REWARDS, REWARDS };
 
 export interface Claim {
   id: string;
@@ -135,6 +135,21 @@ export async function redeem(rewardId: string): Promise<Wallet | null> {
     return cache(normalize(data.wallet));
   } catch {
     return null;
+  }
+}
+
+/**
+ * Try to claim the birthday gift. The server only awards on the real day
+ * (once per year), so this is safe to fire on every birthday-mode page load.
+ */
+export async function claimBirthdayGift(): Promise<EarnResult> {
+  try {
+    const res = await fetch("/api/wallet/birthday", { method: "POST" });
+    if (!res.ok) return { wallet: readCachedWallet(), awarded: 0 };
+    const data = (await res.json()) as EarnResult;
+    return { wallet: cache(normalize(data.wallet)), awarded: data.awarded ?? 0 };
+  } catch {
+    return { wallet: readCachedWallet(), awarded: 0 };
   }
 }
 

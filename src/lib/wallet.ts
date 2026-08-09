@@ -14,6 +14,7 @@
 import type { PoolClient } from "pg";
 import { withTransaction } from "@/lib/db";
 import { DAILY_EARN_CAP, earnCap, rewardById } from "@/lib/rewards";
+import { birthdayYearInNY, isBirthdayInNY } from "@/lib/birthday";
 
 export interface WalletClaim {
   id: string;
@@ -225,6 +226,9 @@ export async function redeemReward(
   return withWallet(async (client) => {
     const reward = rewardById(rewardId);
     if (!reward) return null;
+    // Birthday exclusives are only redeemable on the day itself (NY time),
+    // so they can't be bought early or late by hitting the API directly.
+    if (reward.birthdayOnly && !isBirthdayInNY()) return null;
 
     const state = await readState(client);
     if (state.balance < reward.cost) return null;
@@ -240,6 +244,40 @@ export async function redeemReward(
       [reward.id, reward.title, reward.emoji, reward.cost, ledger.rows[0].id],
     );
     return readState(client);
+  });
+}
+
+export const BIRTHDAY_GIFT_POINTS = 500;
+
+/**
+ * The once-a-year birthday gift: 500 paw points, deposited into the ledger
+ * the first time the app is opened on August 25 (NY time). The ledger row is
+ * tagged `birthday-<year>`, so it can never double-award — and the server
+ * date check means previewing with ?cleia=birthday can't claim it early.
+ */
+export async function claimBirthdayGift(): Promise<EarnResult> {
+  return withWallet(async (client) => {
+    const noop = async (): Promise<EarnResult> => ({
+      wallet: await readState(client),
+      awarded: 0,
+    });
+    if (!isBirthdayInNY()) return noop();
+
+    const tag = `birthday-${birthdayYearInNY()}`;
+    const existing = await client.query(
+      "SELECT 1 FROM wallet_ledger WHERE game_id = $1 LIMIT 1",
+      [tag],
+    );
+    if (existing.rows.length > 0) return noop();
+
+    await client.query(
+      "INSERT INTO wallet_ledger (kind, amount, game_id) VALUES ('earn', $1, $2)",
+      [BIRTHDAY_GIFT_POINTS, tag],
+    );
+    return {
+      wallet: await readState(client),
+      awarded: BIRTHDAY_GIFT_POINTS,
+    };
   });
 }
 

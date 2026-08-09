@@ -695,6 +695,31 @@ body::before {
   .cleia-wag-fast, .cleia-sleep, .cleia-zzz { animation: none; }
 }
 
+/* Birthday balloons: drift from below the fold up past the top, forever. */
+@keyframes bday-float {
+  0%   { transform: translateY(105vh) rotate(-3deg); }
+  50%  { transform: translateY(45vh) rotate(4deg); }
+  100% { transform: translateY(-30vh) rotate(-2deg); }
+}
+.bday-balloon {
+  top: 0;
+  transform: translateY(105vh);
+  animation: bday-float linear infinite;
+  cursor: pointer;
+}
+@keyframes bday-burst {
+  0%   { opacity: 1; transform: scale(0.4); }
+  60%  { opacity: 1; transform: scale(1.35); }
+  100% { opacity: 0; transform: scale(1.6); }
+}
+.bday-burst {
+  animation: bday-burst 560ms ease-out both;
+}
+@media (prefers-reduced-motion: reduce) {
+  .bday-balloon { animation: none; top: auto; bottom: 20vh; transform: none; }
+  .bday-burst { animation: none; opacity: 0; }
+}
+
 /* Respect user motion preferences: kill the showy loops, keep static styles. */
 @media (prefers-reduced-motion: reduce) {
   body::before { animation: none; }

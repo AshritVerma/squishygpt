@@ -1,9 +1,11 @@
 "use client";
 
-import { Suspense, useRef, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { SquishyMascot } from "@/components/SquishyMascot";
 import { FloatingDoodles } from "@/components/FloatingDoodles";
+import { Confetti } from "@/components/Confetti";
+import { birthdayActive } from "@/lib/birthday";
 
 // Playful phoropter-style prompts for a wrong password (optometry in-joke).
 const PHOROPTER = [
@@ -20,6 +22,21 @@ function LoginForm() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const attempts = useRef(0);
+  // Party mode starts at the front door on Aug 25. Resolved after mount so
+  // the server and client first paint match.
+  const [birthday, setBirthday] = useState(false);
+  const [confetti, setConfetti] = useState(false);
+
+  useEffect(() => {
+    if (!birthdayActive()) return;
+    // Deferred so the first client paint matches the server render.
+    const raf = requestAnimationFrame(() => setBirthday(true));
+    const t = window.setTimeout(() => setConfetti(true), 400);
+    return () => {
+      cancelAnimationFrame(raf);
+      window.clearTimeout(t);
+    };
+  }, []);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -49,6 +66,7 @@ function LoginForm() {
   return (
     <div className="relative flex min-h-[100dvh] items-center justify-center px-5">
       <FloatingDoodles />
+      {confetti && <Confetti onDone={() => setConfetti(false)} />}
       <form
         onSubmit={submit}
         className="glass squish-shadow bubble-in w-full max-w-sm rounded-3xl p-7 text-center"
@@ -60,7 +78,9 @@ function LoginForm() {
           <span className="accent-text">SquishyGPT</span>
         </h1>
         <p className="mt-1 text-sm text-[var(--muted)]">
-          Serena&apos;s optometry brain
+          {birthday
+            ? "happy birthday, dr. serena!! 🎂🎈"
+            : "Serena's optometry brain"}
         </p>
 
         <input

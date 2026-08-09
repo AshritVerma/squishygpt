@@ -10,6 +10,8 @@ export interface Reward {
   blurb: string;
   emoji: string;
   cost: number;
+  /** Only offered (and only redeemable, server-enforced) on Serena's birthday. */
+  birthdayOnly?: boolean;
 }
 
 // Real-life rewards, honored by Ashrit.
@@ -65,8 +67,41 @@ export const REWARDS: Reward[] = [
   },
 ];
 
+// Birthday exclusives — visible and redeemable only on August 25 (the server
+// re-checks the date on redeem, so they can't be bought early via the API).
+// Priced at 1 point so they're claimable the moment she opens the shop.
+export const BIRTHDAY_REWARDS: Reward[] = [
+  {
+    id: "bday-dinner",
+    title: "Birthday dinner, anywhere",
+    blurb: "Any restaurant you want tonight. Zero budget talk.",
+    emoji: "🎂",
+    cost: 1,
+    birthdayOnly: true,
+  },
+  {
+    id: "bday-gift",
+    title: "One no-questions-asked gift",
+    blurb: "Point at it, it's yours. Ashrit doesn't get a vote.",
+    emoji: "🎁",
+    cost: 1,
+    birthdayOnly: true,
+  },
+  {
+    id: "bday-queen",
+    title: "Queen-for-the-day pass",
+    blurb: "All chores, errands, and Cleia duties covered until midnight.",
+    emoji: "👑",
+    cost: 1,
+    birthdayOnly: true,
+  },
+];
+
 export function rewardById(id: string): Reward | undefined {
-  return REWARDS.find((r) => r.id === id);
+  return (
+    REWARDS.find((r) => r.id === id) ??
+    BIRTHDAY_REWARDS.find((r) => r.id === id)
+  );
 }
 
 // ---- Anti-cheat limits ----
