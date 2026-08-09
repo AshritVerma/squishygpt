@@ -11,8 +11,9 @@ import { Shop } from "./Shop";
 import { fetchClientState, pushClientState } from "@/lib/clientState";
 import {
   earnPoints,
-  readWallet,
-  syncWallet,
+  fetchWallet,
+  readCachedWallet,
+  startGameSession,
   type Wallet,
 } from "@/lib/pawPoints";
 import type { GameProps } from "./types";
@@ -118,17 +119,29 @@ export function Arcade({ onClose }: { onClose: () => void }) {
   // so bests carry across devices/domains.
   const [bests, setBests] = useState<ArcadeBests>(readLocalBests);
   const bestsRef = useRef<ArcadeBests>(bests);
-  const [wallet, setWallet] = useState<Wallet>(readWallet);
+  const [wallet, setWallet] = useState<Wallet>(readCachedWallet);
   const [earnedToast, setEarnedToast] = useState<number | null>(null);
   const toastTimer = useRef<number | undefined>(undefined);
+  // Server-issued, single-use session for the current run. Requested when a
+  // game is opened (and re-primed after each payout so a retry has a fresh one).
+  const sessionRef = useRef<string | null>(null);
 
   useEffect(() => {
     syncArcadeBests().then((merged) => {
       bestsRef.current = merged;
       setBests(merged);
     });
-    syncWallet().then(setWallet);
+    fetchWallet().then(setWallet);
     return () => window.clearTimeout(toastTimer.current);
+  }, []);
+
+  // Open a game and grab a fresh session for its first run.
+  const enterGame = useCallback((id: GameId) => {
+    sessionRef.current = null;
+    setScreen(id);
+    startGameSession(id).then((s) => {
+      sessionRef.current = s;
+    });
   }, []);
 
   // Tell the ambient Cleia to step aside while the arcade is open.
@@ -160,12 +173,29 @@ export function Arcade({ onClose }: { onClose: () => void }) {
 
   const onGameOver = useCallback(
     (which: GameId, score: number) => {
-      // Every run pays out paw points equal to its score.
+      // A run pays out paw points, but the SERVER decides the real amount
+      // (per-run cap, daily cap, single-use session). We just report the score
+      // and reflect whatever it awards.
       if (score > 0) {
-        setWallet(earnPoints(score));
-        setEarnedToast(score);
-        window.clearTimeout(toastTimer.current);
-        toastTimer.current = window.setTimeout(() => setEarnedToast(null), 2600);
+        const sessionId = sessionRef.current;
+        sessionRef.current = null;
+        if (sessionId) {
+          earnPoints(which, sessionId, score).then(({ wallet: w, awarded }) => {
+            setWallet(w);
+            if (awarded > 0) {
+              setEarnedToast(awarded);
+              window.clearTimeout(toastTimer.current);
+              toastTimer.current = window.setTimeout(
+                () => setEarnedToast(null),
+                2600,
+              );
+            }
+          });
+        }
+        // Prime a fresh session so an immediate "Retry" can pay out too.
+        startGameSession(which).then((s) => {
+          sessionRef.current = s;
+        });
       }
 
       if (score <= bestsRef.current[which]) return;
@@ -252,7 +282,7 @@ export function Arcade({ onClose }: { onClose: () => void }) {
             {GAMES.map((g) => (
               <button
                 key={g.id}
-                onClick={() => setScreen(g.id)}
+                onClick={() => enterGame(g.id)}
                 className="glass glow-hover squish-shadow flex items-center justify-between rounded-2xl px-4 py-4 text-left"
               >
                 <span>

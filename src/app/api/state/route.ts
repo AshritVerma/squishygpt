@@ -4,7 +4,10 @@ import { query } from "@/lib/db";
 export const runtime = "nodejs";
 
 // Small key/value sync for client state (single-user app, gated by middleware).
-const ALLOWED_KEYS = new Set(["conversations", "arcade", "wallet"]);
+// NOTE: "wallet" is intentionally NOT allowed here — the paw-points balance is
+// server-authoritative (see /api/wallet + src/lib/wallet.ts) so it can't be set
+// by PUTing arbitrary JSON. Only cosmetic, non-currency state syncs through here.
+const ALLOWED_KEYS = new Set(["conversations", "arcade"]);
 
 export async function GET(req: Request) {
   const key = new URL(req.url).searchParams.get("key") ?? "";
