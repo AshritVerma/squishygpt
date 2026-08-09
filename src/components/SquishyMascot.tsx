@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { mascotLevel, questionCount } from "@/lib/milestones";
+import { birthdayActive } from "@/lib/birthday";
 
 export type MascotMood = "idle" | "thinking" | "talking";
 
@@ -70,6 +71,7 @@ export function SquishyMascot({
   const [squished, setSquished] = useState(false);
   const [boinging, setBoinging] = useState(false);
   const [level, setLevel] = useState<0 | 1 | 2>(0);
+  const [party, setParty] = useState(false);
 
   const reactionTimer = useRef<number | undefined>(undefined);
   const noteTimer = useRef<number | undefined>(undefined);
@@ -227,6 +229,22 @@ export function SquishyMascot({
     };
   }, [say]);
 
+  // Birthday party mode (Aug 25, or ?cleia=birthday preview): a party hat all
+  // day, plus one celebratory star-eyed moment shortly after load.
+  useEffect(() => {
+    if (!birthdayActive()) return;
+    // Deferred so the first client paint matches the server render.
+    const raf = requestAnimationFrame(() => setParty(true));
+    const t = window.setTimeout(
+      () => react("stars", "happy birthday!! 🎂", 2600),
+      1100,
+    );
+    return () => {
+      cancelAnimationFrame(raf);
+      window.clearTimeout(t);
+    };
+  }, [react]);
+
   // Global easter-egg reactions.
   useEffect(() => {
     const on2020 = () => react("stars", "perfect vision!! ✨", 2400);
@@ -361,6 +379,7 @@ export function SquishyMascot({
       onPointerMove={onSwipeMove}
       data-squishy
       data-level={level}
+      data-party={party ? "true" : "false"}
       data-reaction={reaction ?? "none"}
       data-drowsy={drowsy ? "true" : "false"}
       data-glasses={glassesStolen ? "stolen" : "on"}
@@ -458,8 +477,34 @@ export function SquishyMascot({
           <path d="M134 70 q-10 6 -4 16" />
         </g>
 
+        {/* birthday party hat (Aug 25) — takes the cap's spot for the day */}
+        {party && (
+          <g data-accessory="party" transform="rotate(-9 100 44)">
+            <defs>
+              <linearGradient id="partyHat" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor="#f472b6" />
+                <stop offset="100%" stopColor="#a855f7" />
+              </linearGradient>
+              <clipPath id="partyHatClip">
+                <polygon points="100,4 124,50 76,50" />
+              </clipPath>
+            </defs>
+            <polygon
+              points="100,4 124,50 76,50"
+              fill="url(#partyHat)"
+              stroke="#86198f"
+              strokeWidth="2"
+            />
+            <g clipPath="url(#partyHatClip)">
+              <path d="M72 40 h56" stroke="#ffd23f" strokeWidth="5" />
+              <path d="M82 24 h36" stroke="#ffd23f" strokeWidth="4" />
+            </g>
+            <circle cx="100" cy="6" r="6" fill="#ffd23f" />
+          </g>
+        )}
+
         {/* graduation cap (250-question milestone) */}
-        {level >= 1 && (
+        {!party && level >= 1 && (
           <g data-accessory="cap">
             <ellipse cx="100" cy="42" rx="23" ry="10" fill="#2f2144" />
             <polygon

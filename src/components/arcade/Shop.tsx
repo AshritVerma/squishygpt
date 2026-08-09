@@ -2,12 +2,14 @@
 
 import { useState } from "react";
 import {
+  BIRTHDAY_REWARDS,
   REWARDS,
   redeem,
   markClaimUsed,
   type Reward,
   type Wallet,
 } from "@/lib/pawPoints";
+import { birthdayActive } from "@/lib/birthday";
 
 // The Paw Shop — spend points earned in the arcade on real-life rewards,
 // honored by Ashrit. Redeeming creates a voucher in "Claimed"; tap "mark done"
@@ -22,6 +24,9 @@ export function Shop({
   const [confirming, setConfirming] = useState<Reward | null>(null);
   const [justClaimed, setJustClaimed] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  // The Shop only mounts client-side (inside the arcade overlay), so reading
+  // the date/URL directly is hydration-safe.
+  const [birthday] = useState(birthdayActive);
 
   const buy = async (reward: Reward) => {
     setConfirming(null);
@@ -51,6 +56,61 @@ export function Shop({
   const pending = wallet.claims.filter((c) => !c.used);
   const used = wallet.claims.filter((c) => c.used);
 
+  const renderReward = (r: Reward, festive: boolean) => {
+    const affordable = wallet.balance >= r.cost;
+    const isConfirming = confirming?.id === r.id;
+    return (
+      <div
+        key={r.id}
+        className={`glass squish-shadow rounded-2xl px-4 py-3 transition ${
+          justClaimed === r.id ? "ring-2 ring-[var(--ring)]" : ""
+        } ${festive ? "border border-[var(--accent)]/40 bg-[var(--accent)]/[0.06]" : ""}`}
+      >
+        <div className="flex items-center gap-3">
+          <span className="text-2xl">{r.emoji}</span>
+          <div className="min-w-0 flex-1">
+            <p className="font-bold leading-tight">{r.title}</p>
+            <p className="text-xs text-[var(--muted)]">{r.blurb}</p>
+          </div>
+          {isConfirming ? (
+            <div className="flex shrink-0 flex-col gap-1">
+              <button
+                onClick={() => buy(r)}
+                disabled={busy}
+                className="accent-gradient spring rounded-full px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-60"
+              >
+                Confirm
+              </button>
+              <button
+                onClick={() => setConfirming(null)}
+                className="rounded-full px-3 py-1 text-[11px] text-[var(--muted)]"
+              >
+                Cancel
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={() => affordable && setConfirming(r)}
+              disabled={!affordable}
+              className={`spring shrink-0 rounded-full px-3 py-1.5 text-xs font-semibold transition ${
+                affordable
+                  ? "accent-gradient text-white"
+                  : "bg-[var(--accent)]/10 text-[var(--muted)] opacity-60"
+              }`}
+            >
+              {r.cost} 🐾
+            </button>
+          )}
+        </div>
+        {justClaimed === r.id && (
+          <p className="mt-2 text-center text-xs font-semibold text-[var(--accent)]">
+            Claimed!! Show Ashrit this screen 🎉
+          </p>
+        )}
+      </div>
+    );
+  };
+
   return (
     <div className="scroll-area flex flex-1 flex-col gap-4 overflow-y-auto p-4">
       {/* Balance */}
@@ -75,62 +135,24 @@ export function Shop({
         Play games to earn points, redeem them for the real thing. 💝
       </p>
 
+      {/* Birthday exclusives — Aug 25 only */}
+      {birthday && (
+        <div data-testid="birthday-shop">
+          <h3 className="mb-2 text-sm font-bold">
+            Birthday exclusives 🎂{" "}
+            <span className="text-xs font-normal text-[var(--muted)]">
+              today only!!
+            </span>
+          </h3>
+          <div className="flex flex-col gap-2">
+            {BIRTHDAY_REWARDS.map((r) => renderReward(r, true))}
+          </div>
+        </div>
+      )}
+
       {/* Catalog */}
       <div className="flex flex-col gap-2">
-        {REWARDS.map((r) => {
-          const affordable = wallet.balance >= r.cost;
-          const isConfirming = confirming?.id === r.id;
-          return (
-            <div
-              key={r.id}
-              className={`glass squish-shadow rounded-2xl px-4 py-3 transition ${
-                justClaimed === r.id ? "ring-2 ring-[var(--ring)]" : ""
-              }`}
-            >
-              <div className="flex items-center gap-3">
-                <span className="text-2xl">{r.emoji}</span>
-                <div className="min-w-0 flex-1">
-                  <p className="font-bold leading-tight">{r.title}</p>
-                  <p className="text-xs text-[var(--muted)]">{r.blurb}</p>
-                </div>
-                {isConfirming ? (
-                  <div className="flex shrink-0 flex-col gap-1">
-                    <button
-                      onClick={() => buy(r)}
-                      disabled={busy}
-                      className="accent-gradient spring rounded-full px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-60"
-                    >
-                      Confirm
-                    </button>
-                    <button
-                      onClick={() => setConfirming(null)}
-                      className="rounded-full px-3 py-1 text-[11px] text-[var(--muted)]"
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                ) : (
-                  <button
-                    onClick={() => affordable && setConfirming(r)}
-                    disabled={!affordable}
-                    className={`spring shrink-0 rounded-full px-3 py-1.5 text-xs font-semibold transition ${
-                      affordable
-                        ? "accent-gradient text-white"
-                        : "bg-[var(--accent)]/10 text-[var(--muted)] opacity-60"
-                    }`}
-                  >
-                    {r.cost} 🐾
-                  </button>
-                )}
-              </div>
-              {justClaimed === r.id && (
-                <p className="mt-2 text-center text-xs font-semibold text-[var(--accent)]">
-                  Claimed!! Show Ashrit this screen 🎉
-                </p>
-              )}
-            </div>
-          );
-        })}
+        {REWARDS.map((r) => renderReward(r, false))}
       </div>
 
       {/* Claimed vouchers */}

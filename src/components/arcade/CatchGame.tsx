@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { drawCleia, GRID_H, GRID_W, type CleiaFrame } from "@/lib/cleiaSprite";
+import { birthdayActive } from "@/lib/birthday";
 import type { GameProps } from "./types";
 
 type Phase = "ready" | "playing" | "over";
@@ -24,9 +25,16 @@ interface Pop {
 const ACCENT = "#ec4899";
 const ACCENT2 = "#a855f7";
 const POINTS: Record<ItemType, number> = { bone: 1, heart: 2, charm: 5, grape: 0 };
+// Birthday reskin: cake falls from the sky and every catch is worth double.
+const CAKE_GLYPH: Partial<Record<ItemType, string>> = {
+  bone: "🍰",
+  heart: "🧁",
+  charm: "🎂",
+};
 
 // Treat Catch — slide Cleia along the bottom to catch falling bones, hearts,
 // and her gold "C" charm; dodge grapes (toxic to dogs). Three lives.
+// On Aug 25 it becomes Cake Catch: birthday desserts at 2× paw points.
 export function CatchGame({ best, onGameOver, onExit }: GameProps) {
   const wrapRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -34,6 +42,8 @@ export function CatchGame({ best, onGameOver, onExit }: GameProps) {
   const [finalScore, setFinalScore] = useState(0);
   const phaseRef = useRef<Phase>("ready");
   const startRef = useRef<() => void>(() => {});
+  // Games only mount client-side (inside the arcade), so this is safe.
+  const [bday] = useState(birthdayActive);
 
   useEffect(() => {
     phaseRef.current = phase;
@@ -134,6 +144,14 @@ export function CatchGame({ best, onGameOver, onExit }: GameProps) {
 
     const drawItem = (it: Item) => {
       const { x, y, r, type } = it;
+      if (bday && type !== "grape") {
+        ctx.font = `${Math.round(r * 2.1)}px system-ui, sans-serif`;
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText(CAKE_GLYPH[type] ?? "🍰", x, y);
+        ctx.textBaseline = "alphabetic";
+        return;
+      }
       if (type === "bone") {
         ctx.fillStyle = "#f4ddbf";
         const k = r * 0.5;
@@ -247,14 +265,10 @@ export function CatchGame({ best, onGameOver, onExit }: GameProps) {
                 setPhase("over");
               }
             } else {
-              scoreVal += POINTS[it.type];
+              const gained = POINTS[it.type] * (bday ? 2 : 1);
+              scoreVal += gained;
               navigator.vibrate?.(8);
-              pops.push({
-                x: it.x,
-                y: it.y,
-                t: 0.8,
-                glyph: it.type === "charm" ? "+5" : it.type === "heart" ? "+2" : "+1",
-              });
+              pops.push({ x: it.x, y: it.y, t: 0.8, glyph: `+${gained}` });
             }
             continue; // consumed
           }
@@ -321,6 +335,14 @@ export function CatchGame({ best, onGameOver, onExit }: GameProps) {
       }
       ctx.globalAlpha = 1;
 
+      // birthday banner
+      if (bday) {
+        ctx.fillStyle = ACCENT;
+        ctx.font = "bold 12px ui-monospace, monospace";
+        ctx.textAlign = "center";
+        ctx.fillText("🎂 birthday mode · 2× points 🎂", W / 2, 24);
+      }
+
       raf = requestAnimationFrame(loop);
     };
 
@@ -373,7 +395,9 @@ export function CatchGame({ best, onGameOver, onExit }: GameProps) {
         <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-1 text-center">
           <p className="text-base font-bold">Tap to start</p>
           <p className="text-xs text-[var(--muted)]">
-            Drag to move Cleia. Catch treats, dodge grapes 🍇
+            {bday
+              ? "Birthday mode!! Catch the cake, dodge grapes — 2× points 🎂"
+              : "Drag to move Cleia. Catch treats, dodge grapes 🍇"}
           </p>
         </div>
       )}

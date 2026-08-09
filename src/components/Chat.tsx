@@ -8,8 +8,13 @@ import { SquishyMascot } from "./SquishyMascot";
 import { FloatingDoodles } from "./FloatingDoodles";
 import { Confetti } from "./Confetti";
 import { Arcade, syncArcadeBests } from "./arcade/Arcade";
+import { BirthdayBalloons } from "./birthday/BirthdayBalloons";
+import { BirthdayLetter } from "./birthday/BirthdayLetter";
+import { BirthdayRecap } from "./birthday/BirthdayRecap";
 import { fetchClientState, pushClientState } from "@/lib/clientState";
 import { QUESTION_COUNT_KEY, mascotLevel } from "@/lib/milestones";
+import { birthdayActive } from "@/lib/birthday";
+import { claimBirthdayGift } from "@/lib/pawPoints";
 
 const DEFAULT_SUGGESTIONS = [
   "Differentials for a painful red eye",
@@ -42,6 +47,16 @@ const EYE_FACTS = [
   "20/20 vision means normal, not perfect — some people see 20/10.",
   "The muscles that move your eyes are the fastest in your body.",
   "Tears have three layers: oily, watery, and mucous.",
+];
+
+const BIRTHDAY_FACT =
+  "On this day, the world's best future optometrist was born. Studies show this improves everyone's outlook. 🎂";
+
+const BIRTHDAY_SUGGESTIONS = [
+  "How old is Serena in dog years?",
+  "What did Cleia get me for my birthday?",
+  "Do eyes age like fine wine?",
+  "Best birthday cake for perfect vision?",
 ];
 
 function factOfTheDay(): string {
@@ -140,6 +155,10 @@ export function Chat() {
   const [confetti, setConfetti] = useState(false);
   const [factHidden, setFactHidden] = useState(true);
   const [arcadeOpen, setArcadeOpen] = useState(false);
+  // Birthday mode is resolved after mount (date/URL param) so the server and
+  // client first paint stay identical.
+  const [birthday, setBirthday] = useState(false);
+  const [recapOpen, setRecapOpen] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -170,6 +189,33 @@ export function Chat() {
     syncArcadeBests();
   }, []);
 
+  // Birthday mode (Aug 25, or ?cleia=birthday preview). Also tries to claim
+  // the once-a-year paw-point gift — the server only pays out on the real
+  // day, once, so this is safe to fire on every load.
+  useEffect(() => {
+    if (!birthdayActive()) return;
+    // Deferred so the first client paint matches the server render.
+    const raf = requestAnimationFrame(() => {
+      setBirthday(true);
+      // The birthday fact always shows, even if today's fact was dismissed.
+      setFactHidden(false);
+    });
+    claimBirthdayGift().then(({ awarded }) => {
+      if (awarded <= 0) return;
+      celebrate();
+      // Announced after Cleia's own 900ms birthday cheer, so one bubble
+      // doesn't stomp the other.
+      window.setTimeout(() => {
+        window.dispatchEvent(
+          new CustomEvent("squishy:cleia-say", {
+            detail: { text: `i saved up ${awarded} paw points for you!! 🎁🐾` },
+          }),
+        );
+      }, 3000);
+    });
+    return () => cancelAnimationFrame(raf);
+  }, [celebrate]);
+
   // Confetti can also be triggered from elsewhere (e.g. Cleia's birthday).
   useEffect(() => {
     const onConfetti = () => celebrate();
@@ -188,6 +234,11 @@ export function Chat() {
   // Personalized suggestions: generated from her cards + recent questions,
   // cached locally so we don't regenerate on every visit.
   const loadSuggestions = useCallback(async (force: boolean) => {
+    // On her birthday the chips are party questions, not study prompts.
+    if (birthdayActive()) {
+      setSuggestions(BIRTHDAY_SUGGESTIONS);
+      return;
+    }
     try {
       if (!force) {
         const cached = localStorage.getItem(SUG_KEY);
@@ -428,6 +479,8 @@ export function Chat() {
       <FloatingDoodles />
       {confetti && <Confetti onDone={() => setConfetti(false)} />}
       {arcadeOpen && <Arcade onClose={() => setArcadeOpen(false)} />}
+      {birthday && <BirthdayBalloons onOpenRecap={() => setRecapOpen(true)} />}
+      {recapOpen && <BirthdayRecap onClose={() => setRecapOpen(false)} />}
 
       {/* History side panel */}
       <div
@@ -535,6 +588,15 @@ export function Chat() {
           </a>
         </div>
         <div className="flex items-center gap-2 sm:gap-3">
+          {birthday && (
+            <button
+              onClick={() => setRecapOpen(true)}
+              aria-label="Open your birthday recap"
+              className="spring flex h-10 w-10 items-center justify-center rounded-full text-lg transition hover:bg-[var(--accent)]/10"
+            >
+              🎁
+            </button>
+          )}
           <button
             onClick={() => setArcadeOpen(true)}
             aria-label="Open Cleia's arcade"
@@ -581,13 +643,26 @@ export function Chat() {
           {messages.length === 0 ? (
             <div className="mt-10 flex flex-col items-center text-center sm:mt-20">
               <div className="mb-3">
-                <SquishyMascot size={216} greeting="Hi Squishy! 👋" />
+                <SquishyMascot
+                  size={216}
+                  greeting={
+                    birthday ? "happy birthday, doctor 🎂" : "Hi Squishy! 👋"
+                  }
+                />
               </div>
-              <h2 className="text-xl font-bold">Your optometry brain is ready</h2>
+              <h2 className="text-xl font-bold">
+                {birthday
+                  ? "It's your day, Dr. Serena 🎉"
+                  : "Your optometry brain is ready"}
+              </h2>
               <p className="mt-1 max-w-sm text-sm text-[var(--muted)]">
-                Ask me anything from your optometry sets. Type it or tap the mic
-                and speak. (Psst — tap me, I&apos;ll wave back.)
+                {birthday
+                  ? "No flashcards required today. Pop the balloons, open your letter, and check the Paw Shop 🎈"
+                  : "Ask me anything from your optometry sets. Type it or tap the mic and speak. (Psst — tap me, I'll wave back.)"}
               </p>
+              {birthday && (
+                <BirthdayLetter onOpenRecap={() => setRecapOpen(true)} />
+              )}
               <div className="mt-6 flex w-full max-w-md items-center justify-between px-1">
                 <span className="text-xs font-medium text-[var(--muted)]">
                   {loadingSug ? "Finding what's relevant…" : "Suggested for you"}
@@ -638,7 +713,7 @@ export function Chat() {
                     <span className="font-semibold text-[var(--accent)]">
                       Eye fact of the day:{" "}
                     </span>
-                    {factOfTheDay()}
+                    {birthday ? BIRTHDAY_FACT : factOfTheDay()}
                   </p>
                   <button
                     onClick={() => {

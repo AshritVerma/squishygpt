@@ -11,6 +11,7 @@ import {
   GRID_W,
   GRID_H,
 } from "@/lib/cleiaSprite";
+import { BIRTHDAY_MONTH, isBirthdayDate } from "@/lib/birthday";
 
 // Cleia — a bit-style pixel-art cavapoo who trots back and forth along the
 // space above the chat bar and, every so often, takes a springy leap to a
@@ -76,14 +77,9 @@ function accessoryForToday(): Accessory {
   const m = d.getMonth();
   const day = d.getDate();
   if (m === 11) return "santa"; // December
-  if (m === 7 && day === 25) return "party"; // Serena's birthday
+  if (isBirthdayDate(d)) return "party"; // Serena's birthday
   if (m === 1 && day >= 7 && day <= 17) return "hearts"; // Valentine's window
   return null;
-}
-
-function isBirthday(): boolean {
-  const d = new Date();
-  return d.getMonth() === 7 && d.getDate() === 25;
 }
 
 function HatSprite({ hat, pixel }: { hat: HatDef; pixel: number }) {
@@ -119,9 +115,9 @@ function chatterPool(): string[] {
   if (h < 9) extra.push("good morning mommy!", "did you sleep well? 🐾");
   if (h >= 0 && h < 5) extra.push("go to sleep 🐾", "it's late mommy…");
   if (now.getDay() === 5) extra.push("happy friday!!", "it's friyay 🎉");
-  if (now.getMonth() === 7) extra.push("it's your birthday month!! 🎂");
-  if (now.getMonth() === 7 && now.getDate() === 25)
-    extra.push("HAPPY BIRTHDAY MOMMY!! 🎂🎉");
+  if (now.getMonth() === BIRTHDAY_MONTH)
+    extra.push("it's your birthday month!! 🎂");
+  if (isBirthdayDate(now)) extra.push("HAPPY BIRTHDAY MOMMY!! 🎂🎉");
   return [...CHATTER, ...extra];
 }
 
@@ -547,7 +543,7 @@ export function CleiaDog({ pixel = 6 }: { pixel?: number }) {
           ? "party"
           : accessoryForToday();
     setAccessory(acc);
-    const bday = isBirthday() || o === "birthday";
+    const bday = isBirthdayDate(new Date()) || o === "birthday";
     setBirthdayMode(bday);
     if (bday) setBubble("HAPPY BIRTHDAY MOMMY!! 🎂🎉");
     if (o === "nap") setNapping(true);
@@ -597,11 +593,20 @@ export function CleiaDog({ pixel = 6 }: { pixel?: number }) {
       if (nappingRef.current) wake();
       hop("so smart mommy!!");
     };
+    // Anyone can hand Cleia a line to bark (e.g. the birthday gift claim).
+    const onSay = (e: Event) => {
+      const text = (e as CustomEvent<{ text: string }>).detail?.text;
+      if (!text) return;
+      if (nappingRef.current) wake();
+      hop(text);
+    };
     window.addEventListener("squishy:feral", onFeral);
     window.addEventListener("squishy:confetti", onConfetti);
+    window.addEventListener("squishy:cleia-say", onSay as EventListener);
     return () => {
       window.removeEventListener("squishy:feral", onFeral);
       window.removeEventListener("squishy:confetti", onConfetti);
+      window.removeEventListener("squishy:cleia-say", onSay as EventListener);
     };
   }, [hop, wake, spawnHeart]);
 
