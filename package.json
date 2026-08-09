@@ -17,16 +17,22 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.109.0",
+    "@huggingface/transformers": "^4.2.0",
+    "@serwist/next": "^9.5.11",
+    "idb": "^8.0.3",
+    "minisearch": "^7.2.0",
     "next": "16.2.9",
     "openai": "^6.45.0",
     "pg": "^8.22.0",
     "react": "19.2.4",
     "react-dom": "19.2.4",
     "react-markdown": "^10.1.0",
-    "remark-gfm": "^4.0.1"
+    "remark-gfm": "^4.0.1",
+    "serwist": "^9.5.11"
   },
   "devDependencies": {
     "@playwright/test": "^1.61.1",
+    "@serwist/window": "^9.5.11",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
     "@types/pg": "^8.20.0",

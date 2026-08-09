@@ -21,16 +21,31 @@ export function Shop({
 }) {
   const [confirming, setConfirming] = useState<Reward | null>(null);
   const [justClaimed, setJustClaimed] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
 
-  const buy = (reward: Reward) => {
-    const next = redeem(reward);
+  const buy = async (reward: Reward) => {
     setConfirming(null);
+    if (busy) return;
+    setBusy(true);
+    // The server checks affordability against the authoritative balance and
+    // uses its own catalog price, so a tampered client can't redeem for free.
+    // It also pings Ashrit (SMS/Slack/email) once the redeem truly commits.
+    const next = await redeem(reward.id);
+    setBusy(false);
     if (!next) return;
     onWalletChange(next);
     setJustClaimed(reward.id);
     window.setTimeout(() => setJustClaimed(null), 2500);
     navigator.vibrate?.(20);
     window.dispatchEvent(new Event("squishy:confetti"));
+  };
+
+  const markDone = async (claimId: string) => {
+    if (busy) return;
+    setBusy(true);
+    const next = await markClaimUsed(claimId);
+    setBusy(false);
+    onWalletChange(next);
   };
 
   const pending = wallet.claims.filter((c) => !c.used);
@@ -82,7 +97,8 @@ export function Shop({
                   <div className="flex shrink-0 flex-col gap-1">
                     <button
                       onClick={() => buy(r)}
-                      className="accent-gradient spring rounded-full px-3 py-1.5 text-xs font-semibold text-white"
+                      disabled={busy}
+                      className="accent-gradient spring rounded-full px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-60"
                     >
                       Confirm
                     </button>
@@ -142,8 +158,9 @@ export function Shop({
                   </p>
                 </div>
                 <button
-                  onClick={() => onWalletChange(markClaimUsed(c.id))}
-                  className="spring shrink-0 rounded-full px-3 py-1.5 text-xs font-medium text-[var(--muted)] transition hover:bg-emerald-500/10 hover:text-emerald-500"
+                  onClick={() => markDone(c.id)}
+                  disabled={busy}
+                  className="spring shrink-0 rounded-full px-3 py-1.5 text-xs font-medium text-[var(--muted)] transition hover:bg-emerald-500/10 hover:text-emerald-500 disabled:opacity-60"
                 >
                   Mark done
                 </button>

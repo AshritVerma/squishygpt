@@ -1,4 +1,4 @@
-import { Pool } from "pg";
+import { Pool, type PoolClient } from "pg";
 
 declare global {
   // eslint-disable-next-line no-var
@@ -39,6 +39,31 @@ export async function query<T = unknown>(
 ): Promise<T[]> {
   const res = await getPool().query(text, params);
   return res.rows as T[];
+}
+
+/**
+ * Run `fn` inside a single transaction. Commits on success, rolls back on
+ * throw. Used by the wallet so balance checks and ledger writes are atomic.
+ */
+export async function withTransaction<T>(
+  fn: (client: PoolClient) => Promise<T>,
+): Promise<T> {
+  const client = await getPool().connect();
+  try {
+    await client.query("BEGIN");
+    const result = await fn(client);
+    await client.query("COMMIT");
+    return result;
+  } catch (err) {
+    try {
+      await client.query("ROLLBACK");
+    } catch {
+      /* connection may already be broken */
+    }
+    throw err;
+  } finally {
+    client.release();
+  }
 }
 
 export async function closePool(): Promise<void> {

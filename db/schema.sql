@@ -37,8 +37,64 @@ CREATE INDEX IF NOT EXISTS chunks_embedding_idx
 
 -- Small key/value store for per-user client state (conversation history,
 -- arcade high scores). Single-user app, so no user column needed.
+-- NOTE: the paw-points wallet used to live here too, but it is now
+-- server-authoritative (see wallet_ledger below) so it can't be tampered with
+-- by editing client-synced JSON. Legacy wallet rows here are read once to seed
+-- the ledger, then ignored.
 CREATE TABLE IF NOT EXISTS client_state (
   key         TEXT PRIMARY KEY,
   value       JSONB NOT NULL,
   updated_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- gen_random_uuid() lives in pgcrypto (core on PG13+, extension elsewhere).
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
+
+-- ---------------------------------------------------------------------------
+-- Paw-points wallet: server-authoritative and tamper-resistant.
+--
+-- The balance is NEVER stored as a mutable number the client can set. Instead
+-- it is DERIVED from an append-only ledger: every earn (game payout) and every
+-- redeem (reward) is a row. balance = SUM(amount), lifetime = SUM(earn). The
+-- only way to change the balance is through the /api/wallet endpoints, which
+-- enforce per-run caps, a rolling daily cap, and single-use game sessions.
+-- Single-user app, so no user column.
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS wallet_ledger (
+  id          BIGSERIAL PRIMARY KEY,
+  kind        TEXT NOT NULL CHECK (kind IN ('earn', 'redeem')),
+  amount      INTEGER NOT NULL, -- positive for earn, negative for redeem
+  game_id     TEXT,             -- set for earns
+  reward_id   TEXT,             -- set for redeems
+  session_id  UUID,             -- the consumed game session, for earns
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS wallet_ledger_kind_created_idx
+  ON wallet_ledger (kind, created_at);
+
+-- One row per redeemed reward (the real-life voucher Ashrit honors).
+CREATE TABLE IF NOT EXISTS wallet_claims (
+  id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  reward_id   TEXT NOT NULL,
+  title       TEXT NOT NULL,
+  emoji       TEXT NOT NULL,
+  cost        INTEGER NOT NULL,
+  ledger_id   BIGINT REFERENCES wallet_ledger(id) ON DELETE SET NULL,
+  used        BOOLEAN NOT NULL DEFAULT false,
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+  used_at     TIMESTAMPTZ
+);
+
+CREATE INDEX IF NOT EXISTS wallet_claims_created_idx
+  ON wallet_claims (created_at DESC);
+
+-- Server-issued, single-use tokens that tie an earn to a game the client
+-- actually opened. A payout is only accepted with a fresh, unconsumed session
+-- for the matching game, which stops replaying one result or PUTing points.
+CREATE TABLE IF NOT EXISTS game_session (
+  id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  game_id     TEXT NOT NULL,
+  started_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+  consumed_at TIMESTAMPTZ
 );
