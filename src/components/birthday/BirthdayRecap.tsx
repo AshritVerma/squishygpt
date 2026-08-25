@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { SquishyMascot } from "@/components/SquishyMascot";
 import { fetchWallet } from "@/lib/pawPoints";
+import { serenaAge } from "@/lib/birthday";
 import { computeYearStats, type YearStats } from "@/lib/yearStats";
 
 // The "Serena Wrapped" birthday recap — a Spotify-Wrapped-style card of her
@@ -106,7 +107,8 @@ export function BirthdayRecap({ onClose }: { onClose: () => void }) {
             </span>
           </h2>
           <p className="text-sm font-semibold text-pink-200">
-            your year as a future optometrist · {year} 🎂
+            your year as a future optometrist · turning {serenaAge()} · {year}{" "}
+            🎂
           </p>
 
           <div className="pointer-events-none mx-auto -mb-2 mt-2 flex justify-center">

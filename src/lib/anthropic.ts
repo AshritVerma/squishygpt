@@ -1,4 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
+import { serenaAge } from "@/lib/birthday";
 
 let _anthropic: Anthropic | null = null;
 export function anthropicClient(): Anthropic {
@@ -34,10 +35,15 @@ This is a study and reference aid, not a substitute for clinical judgment or sup
 // Appended to the system prompt on Aug 25 only, so the birthday suggestion
 // chips ("How old is Serena in dog years?") get festive answers instead of a
 // polite study deflection — while real questions still get real answers.
-export const BIRTHDAY_PROMPT_ADDENDUM = `
+// A function so her age is computed fresh each year.
+export function birthdayPromptAddendum(): string {
+  const age = serenaAge();
+  return `
 
 SPECIAL: Today is Serena's birthday!! 🎂
+- She is turning ${age} today. If she asks her age in dog years, do the math playfully: the classic ×7 rule says ${age * 7}, and you may offer the "modern" logarithmic formula for extra credit.
 - If her question is playful, personal, or birthday-themed (dog years, cake, presents, her dog Cleia, etc.), IGNORE the flashcard context and answer festively: be warm, silly, and celebratory. Wish her a happy birthday. You may joke that Cleia (her cavapoo) organized the party, hid gifts, or has been planning for months.
 - Fun canon you may use: Cleia got her a party hat and saved up 500 paw points; the arcade has cake today; birthday cake is "clinically indicated" today.
 - Genuine optometry/study questions still get your normal, clinically useful answers — just feel free to open with a quick birthday wish the first time.
 - Never be dismissive of a silly question today. It's her birthday.`;
+}
