@@ -1,6 +1,6 @@
 import {
   anthropicClient,
-  BIRTHDAY_PROMPT_ADDENDUM,
+  birthdayPromptAddendum,
   CLAUDE_MODEL,
   SYSTEM_PROMPT,
 } from "@/lib/anthropic";
@@ -48,7 +48,7 @@ export async function POST(req: Request) {
   };
 
   const system = isBirthdayInNY()
-    ? SYSTEM_PROMPT + BIRTHDAY_PROMPT_ADDENDUM
+    ? SYSTEM_PROMPT + birthdayPromptAddendum()
     : SYSTEM_PROMPT;
 
   const anthropicStream = await anthropicClient().messages.create({
