@@ -1,5 +1,11 @@
-import { anthropicClient, CLAUDE_MODEL, SYSTEM_PROMPT } from "@/lib/anthropic";
+import {
+  anthropicClient,
+  BIRTHDAY_PROMPT_ADDENDUM,
+  CLAUDE_MODEL,
+  SYSTEM_PROMPT,
+} from "@/lib/anthropic";
 import { retrieve, buildContext, uniqueSources } from "@/lib/retrieval";
+import { isBirthdayInNY } from "@/lib/birthday";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -41,10 +47,14 @@ export async function POST(req: Request) {
     content: `Use the following flashcards from Serena's optometry study sets as your primary CONTEXT.\n\nCONTEXT:\n${context}\n\nQUESTION: ${last.content}`,
   };
 
+  const system = isBirthdayInNY()
+    ? SYSTEM_PROMPT + BIRTHDAY_PROMPT_ADDENDUM
+    : SYSTEM_PROMPT;
+
   const anthropicStream = await anthropicClient().messages.create({
     model: CLAUDE_MODEL,
     max_tokens: 1024,
-    system: SYSTEM_PROMPT,
+    system,
     messages: [...history, augmented],
     stream: true,
   });
