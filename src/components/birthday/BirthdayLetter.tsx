@@ -13,7 +13,7 @@ export function BirthdayLetter({ onOpenRecap }: { onOpenRecap: () => void }) {
 
   const studied =
     stats.questions > 0
-      ? `You asked me ${stats.questions} question${stats.questions === 1 ? "" : "s"} this year — every single one made you a little more Dr. Kar. `
+      ? `You asked me ${stats.questions} question${stats.questions === 1 ? "" : "s"} this year — every single one made you a little more Dr. Serena. `
       : "";
   const topic =
     stats.topTopics.length > 0

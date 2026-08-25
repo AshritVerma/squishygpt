@@ -43,6 +43,8 @@ const STOPWORDS = new Set([
   "do", "vs", "versus", "signs", "symptoms", "what's", "whats", "from",
   "would", "should", "which", "there", "have", "has", "was", "were",
   "some", "most", "more", "cause", "causes", "caused", "will", "get",
+  // Names — never interesting as "topics", however often they come up.
+  "serena", "cleia", "squishy", "ashrit", "birthday",
 ]);
 
 export interface YearStats {
