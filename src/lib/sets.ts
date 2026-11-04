@@ -1,7 +1,11 @@
 import { query, toVector } from "./db";
 import { embed, embedBatch } from "./embeddings";
 import { Card, cardToContent } from "./quizlet";
-import { fetchImage, captionImage } from "./cardImages";
+import {
+  describeImage,
+  forEachConcurrent,
+  IMAGE_CONCURRENCY,
+} from "./cardImages";
 
 export interface IngestResult {
   setId: number;
@@ -42,40 +46,38 @@ export async function ingestSet(
   // card so it can be embedded with the card below (making image-only cards
   // searchable). A single image failing never fails the whole set — retrieval
   // is an enhancement, not a prerequisite.
-  const captionsByCard = new Map<number, string[]>();
-  for (let i = 0; i < cards.length; i++) {
-    const card = cards[i];
-    const cardId = cardIds[i];
-    const sides: Array<["term" | "definition", string | undefined]> = [
-      ["term", card.termImage],
-      ["definition", card.definitionImage],
-    ];
-    for (const [side, url] of sides) {
-      if (!url) continue;
-      try {
-        const image = await fetchImage(url);
-        const caption = await captionImage(image, card, side);
-        await query(
-          `INSERT INTO card_images (card_id, side, source_url, mime, bytes, caption)
-           VALUES ($1, $2, $3, $4, $5, $6)
-           ON CONFLICT (card_id, side) DO NOTHING`,
-          [cardId, side, url, image.mime, image.bytes, caption],
-        );
-        const list = captionsByCard.get(cardId) ?? [];
-        list.push(caption);
-        captionsByCard.set(cardId, list);
-      } catch (err) {
-        console.warn(
-          `Skipping ${side} image for card ${cardId} (${url}):`,
-          (err as Error).message,
-        );
-      }
+  const tasks = cards.flatMap((card, i) =>
+    (
+      [
+        ["term", card.termImage],
+        ["definition", card.definitionImage],
+      ] as const
+    )
+      .filter(([, url]) => url)
+      .map(([side, url]) => ({ i, side, url: url as string })),
+  );
+  const captions = cards.map(() => ({ term: "", definition: "" }));
+  await forEachConcurrent(tasks, IMAGE_CONCURRENCY, async ({ i, side, url }) => {
+    try {
+      const { image, caption } = await describeImage(url, cards[i], side);
+      await query(
+        `INSERT INTO card_images (card_id, side, source_url, mime, bytes, caption)
+         VALUES ($1, $2, $3, $4, $5, $6)
+         ON CONFLICT (card_id, side) DO NOTHING`,
+        [cardIds[i], side, url, image.mime, image.bytes, caption],
+      );
+      captions[i][side] = caption;
+    } catch (err) {
+      console.warn(
+        `Skipping ${side} image for card ${cardIds[i]} (${url}):`,
+        (err as Error).message,
+      );
     }
-  }
+  });
 
   // Embed in batches to stay within request limits.
   const contents = cards.map((card, i) =>
-    cardToContent(card, captionsByCard.get(cardIds[i]) ?? []),
+    cardToContent(card, [captions[i].term, captions[i].definition]),
   );
   const BATCH = 96;
   for (let i = 0; i < contents.length; i += BATCH) {
@@ -122,13 +124,9 @@ export async function backfillSetImages(
   const byKey = new Map<string, number>();
   for (const c of existing) byKey.set(key(c.term, c.definition), c.id);
 
-  for (const card of cards) {
-    if (!card.termImage && !card.definitionImage) continue;
-
+  const imageCards = cards.filter((c) => c.termImage || c.definitionImage);
+  await forEachConcurrent(imageCards, IMAGE_CONCURRENCY, async (card) => {
     let cardId = byKey.get(key(card.term, card.definition));
-    // A newly inserted card has no chunk yet, so it must be embedded even if
-    // every one of its images fails to download.
-    let changed = false;
     if (cardId == null) {
       // Image-only (or otherwise new) card the old exporter dropped.
       const [row] = await query<{ id: number }>(
@@ -138,7 +136,6 @@ export async function backfillSetImages(
       cardId = row.id;
       byKey.set(key(card.term, card.definition), cardId);
       result.newCards++;
-      changed = true;
     }
 
     const sides: Array<["term" | "definition", string | undefined]> = [
@@ -154,8 +151,7 @@ export async function backfillSetImages(
       );
       if (present) continue;
       try {
-        const image = await fetchImage(url);
-        const caption = await captionImage(image, card, side);
+        const { image, caption } = await describeImage(url, card, side);
         await query(
           `INSERT INTO card_images (card_id, side, source_url, mime, bytes, caption)
            VALUES ($1, $2, $3, $4, $5, $6)
@@ -163,7 +159,6 @@ export async function backfillSetImages(
           [cardId, side, url, image.mime, image.bytes, caption],
         );
         result.attached++;
-        changed = true;
       } catch (err) {
         console.warn(
           `Skipping ${side} image for card ${cardId} (${url}):`,
@@ -172,25 +167,34 @@ export async function backfillSetImages(
       }
     }
 
-    if (!changed) continue;
-
-    // Re-embed this card with its captions so the image becomes searchable.
+    // Re-embed whenever the stored chunk doesn't reflect the card + captions:
+    // a new card, newly attached images, or an earlier run that died between
+    // storing an image and re-embedding.
     const captions = await query<{ caption: string }>(
-      "SELECT caption FROM card_images WHERE card_id = $1 ORDER BY side",
+      "SELECT caption FROM card_images WHERE card_id = $1 ORDER BY side DESC",
       [cardId],
     );
     const content = cardToContent(
       card,
       captions.map((c) => c.caption),
     );
-    const vector = toVector(await embed(content));
-    await query("DELETE FROM chunks WHERE card_id = $1", [cardId]);
-    await query(
-      "INSERT INTO chunks (card_id, set_id, content, embedding) VALUES ($1, $2, $3, $4::vector)",
-      [cardId, setId, content, vector],
+    const [chunk] = await query<{ content: string }>(
+      "SELECT content FROM chunks WHERE card_id = $1",
+      [cardId],
     );
-    result.reembedded++;
-  }
+    if (chunk?.content === content) return;
+    try {
+      const vector = toVector(await embed(content));
+      await query("DELETE FROM chunks WHERE card_id = $1", [cardId]);
+      await query(
+        "INSERT INTO chunks (card_id, set_id, content, embedding) VALUES ($1, $2, $3, $4::vector)",
+        [cardId, setId, content, vector],
+      );
+      result.reembedded++;
+    } catch (err) {
+      console.warn(`Re-embed failed for card ${cardId}:`, (err as Error).message);
+    }
+  });
 
   return result;
 }
