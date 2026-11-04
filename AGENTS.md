@@ -54,7 +54,8 @@ npm run build && npm start
 
 Card images: the Quizlet exporter (`scripts/quizlet-export.js`) captures image
 URLs per card side; ingest downloads them into the `card_images` table and
-writes a Claude vision caption (model via `CAPTION_MODEL`, defaults to Haiku).
+writes a Claude vision caption (model via `CAPTION_MODEL`, defaults to Sonnet;
+Quizlet's `_m` thumbnail URLs are fetched at full size via `_b`).
 The caption is embedded with the card so image-only cards are searchable. Every
 image on a retrieved card is sent to the client; Claude places the most useful
 inline with `[[image:N]]` markers and the rest render in a thumbnail strip.

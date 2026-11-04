@@ -18,10 +18,11 @@ export const CLAUDE_MODEL =
 export const SUGGESTIONS_MODEL =
   process.env.SUGGESTIONS_MODEL || "claude-haiku-4-5-20251001";
 
-// Vision model used once at ingest time to caption each card image. Haiku is
-// cheap, fast, and more than good enough for a one-to-two sentence description.
+// Vision model used once at ingest time to caption each card image. Sonnet,
+// not Haiku: Haiku misread labels on her hand-drawn and text-heavy diagrams,
+// and captions feed both retrieval and Claude's context.
 export const CAPTION_MODEL =
-  process.env.CAPTION_MODEL || "claude-haiku-4-5-20251001";
+  process.env.CAPTION_MODEL || "claude-sonnet-5-5";
 
 export const SYSTEM_PROMPT = `You are SquishyGPT, Serena's personal optometry study assistant and clinical reference brain.
 
