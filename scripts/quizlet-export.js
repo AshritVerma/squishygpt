@@ -10,9 +10,14 @@
  *      the repo's data/ folder, then run: npm run ingest:json
  *
  * Rate limiting & resuming:
- *   Quizlet's Cloudflare starts returning 403 after ~30 rapid requests. To
- *   handle this the script:
- *     - throttles between sets and retries 403/429 with exponential backoff, and
+ *   Quizlet starts returning 403 after a burst of rapid requests (about 85 sets
+ *   at the default pace in Nov 2026). To handle this the script:
+ *     - throttles between sets and retries transient errors with backoff,
+ *     - on the first 403/429, falls back automatically to a slow pace (about 4s
+ *       per set, which got through ~460 sets without a block) after a cooldown,
+ *     - stops after two blocked sets in a row and downloads what it has, since
+ *       more requests won't help until any bot check on the page is completed
+ *       by a person, and
  *     - caches every set it successfully pulls in IndexedDB (large quota, so it
  *       scales to profiles with hundreds of sets).
  *   So if it still gets cut off, just RE-RUN it (reload the page first, then
@@ -24,7 +29,11 @@
  *   window.QZ_ONLY_FIRST  = true;   // Only process the first set (smoke test)
  *   window.QZ_LIMIT       = 5;      // Process only the first N sets
  *   window.QZ_THROTTLE_MS = 1200;   // Base delay between set fetches (default 900)
- *   window.QZ_MAX_ATTEMPTS = 6;     // Retries per set on 403/429 (default 5)
+ *   window.QZ_MAX_ATTEMPTS = 6;     // Attempts per set on transient errors (default 5)
+ *   window.QZ_SLOW = true;          // Start at the slow pace instead of falling back to it
+ *   window.QZ_SLOW_THROTTLE_MS = 5000; // Base delay at the slow pace (default 4000)
+ *   window.QZ_COOLDOWN_MS = 30000;  // Wait before retrying a blocked set (default 20000)
+ *   window.QZ_STOP_AFTER_BLOCKS = 3;// Blocked sets in a row before stopping (default 2)
  *   window.QZ_DOM_FALLBACK = true;  // Try iframe DOM scrape if API fails (default off; noisy, rarely helps under rate limits)
  *   window.QZ_RESET = true;         // Clear the IndexedDB cache and start fresh
  *   window.QZ_SEED_FROM_FILE = true;// Prompt for a previously downloaded quizlet-export.json and load it into the cache first, so a re-run only fetches the sets still missing
@@ -53,6 +62,15 @@
     typeof window.QZ_THROTTLE_MS === "number" ? window.QZ_THROTTLE_MS : 900;
   const MAX_ATTEMPTS =
     typeof window.QZ_MAX_ATTEMPTS === "number" ? window.QZ_MAX_ATTEMPTS : 5;
+  const SLOW_THROTTLE_MS =
+    typeof window.QZ_SLOW_THROTTLE_MS === "number" ? window.QZ_SLOW_THROTTLE_MS : 4000;
+  const COOLDOWN_MS =
+    typeof window.QZ_COOLDOWN_MS === "number" ? window.QZ_COOLDOWN_MS : 20000;
+  const STOP_AFTER_BLOCKS =
+    typeof window.QZ_STOP_AFTER_BLOCKS === "number" ? window.QZ_STOP_AFTER_BLOCKS : 2;
+  // Attempts per set once blocked: the first try plus one retry after a cooldown.
+  const SLOW_MAX_ATTEMPTS = 2;
+  let slowMode = window.QZ_SLOW === true;
   const ONLY_FIRST = window.QZ_ONLY_FIRST === true;
   const LIMIT = typeof window.QZ_LIMIT === "number" ? window.QZ_LIMIT : null;
   const DOM_FALLBACK = window.QZ_DOM_FALLBACK === true;
@@ -311,23 +329,33 @@
     return cards;
   }
 
-  // Retries on rate-limit / transient errors with exponential backoff.
+  // Retries transient errors with exponential backoff. The first 403/429 also
+  // switches the rest of the run to the slow pace.
   async function fetchCardsViaApi(setId) {
     let lastErr;
-    for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    for (let attempt = 1; ; attempt++) {
       try {
         return await fetchCardsViaApiOnce(setId);
       } catch (err) {
         lastErr = err;
+        if ((err.status === 403 || err.status === 429) && !slowMode) {
+          slowMode = true;
+          console.warn(
+            `[quizlet-export] ${err.message} — falling back to the slow pace for the rest of this run.`,
+          );
+        }
         const retryable =
           err.status === 403 ||
           err.status === 429 ||
           (err.status >= 500 && err.status < 600) ||
           err.status === undefined; // network hiccup
-        if (!retryable || attempt === MAX_ATTEMPTS) break;
-        const backoff = jitter(Math.min(2000 * 2 ** (attempt - 1), 60000));
+        const maxAttempts = slowMode ? SLOW_MAX_ATTEMPTS : MAX_ATTEMPTS;
+        if (!retryable || attempt >= maxAttempts) break;
+        const backoff = jitter(
+          slowMode ? COOLDOWN_MS : Math.min(2000 * 2 ** (attempt - 1), 60000),
+        );
         console.warn(
-          `[quizlet-export]   ${err.message} — backing off ${(backoff / 1000).toFixed(1)}s (attempt ${attempt}/${MAX_ATTEMPTS})`,
+          `[quizlet-export]   ${err.message} — backing off ${(backoff / 1000).toFixed(1)}s (attempt ${attempt}/${maxAttempts})`,
         );
         await sleep(backoff);
       }
@@ -435,6 +463,7 @@
   }
 
   let fetched = 0;
+  let blockedInARow = 0;
   const failures = [];
   for (let i = 0; i < sets.length; i++) {
     const set = sets[i];
@@ -451,12 +480,22 @@
       cache[set.id] = { title: set.title, url: set.url, cards };
       await saveOne(db, set.id, cache[set.id]);
       fetched++;
+      blockedInARow = 0;
       console.log(`${tag} ✓ ${set.title} — ${cards.length} cards (${via})`);
     } catch (err) {
       failures.push({ set, error: err.message });
       console.error(`${tag} ✗ ${set.title} — ${err.message}`);
+      if (err.status === 403 || err.status === 429) {
+        blockedInARow++;
+        if (blockedInARow >= STOP_AFTER_BLOCKS) {
+          console.warn(
+            `[quizlet-export] Stopping: ${blockedInARow} blocked sets in a row. Complete any bot check on the page, reload, and paste this script again to resume.`,
+          );
+          break;
+        }
+      }
     }
-    await sleep(jitter(THROTTLE_MS));
+    await sleep(jitter(slowMode ? SLOW_THROTTLE_MS : THROTTLE_MS));
   }
 
   // Build the combined file from everything cached so far, in profile order.
