@@ -61,7 +61,7 @@ export async function captionImage(
       .filter(Boolean)
       .join("\n") || "(no text on this card)";
 
-  const prompt = `This image is attached to the ${side} side of an optometry flashcard.\n\nCARD TEXT:\n${cardText}\n\nWrite a one-to-two sentence clinical description of the image for a retrieval index: name the modality or view (e.g. fundus photo, OCT, slit lamp, diagram), the structures shown, and any key findings or labels. Be specific and factual. Do not add preamble like "This image shows"; just describe it.`;
+  const prompt = `This image is attached to the ${side} side of an optometry flashcard.\n\nCARD TEXT (for terminology only):\n${cardText}\n\nWrite a one-to-two sentence clinical description of the image for a retrieval index: name the modality or view (e.g. fundus photo, OCT, slit lamp, diagram), the structures shown, and the findings or labels that are actually visible.\n\nDescribe only what you can see in the image. The card text tells you what the card is about, but it is not a description of the image: never state a finding just because the card mentions it. If the image looks normal or does not show what the card describes, say what it does show.\n\nReply with plain text only: no heading, no markdown, no preamble like "This image shows".`;
 
   const res = await anthropicClient().messages.create({
     model: CAPTION_MODEL,
@@ -88,9 +88,13 @@ export async function captionImage(
     ],
   });
 
-  const text = res.content
+  // Captions are rendered as single "[Image N: ...]" context lines, so flatten
+  // any markdown headings or line breaks the model adds anyway.
+  return res.content
     .map((b) => (b.type === "text" ? b.text : ""))
     .join(" ")
+    .replace(/^\s*#+\s.*$/gm, "")
+    .replace(/[*_`]/g, "")
+    .replace(/\s+/g, " ")
     .trim();
-  return text;
 }
