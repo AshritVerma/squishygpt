@@ -1,11 +1,19 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { ImageLightbox, LightboxImage } from "./ImageLightbox";
+
+interface SetCardImage {
+  id: number;
+  side: "term" | "definition";
+  caption: string;
+}
 
 interface SetCard {
   id: number;
   term: string;
   definition: string;
+  images?: SetCardImage[];
 }
 
 interface SetDetail {
@@ -27,6 +35,7 @@ export function SetModal({
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
   const [q, setQ] = useState("");
+  const [lightbox, setLightbox] = useState<LightboxImage | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -142,11 +151,42 @@ export function SetModal({
                 <p className="mt-1 text-sm leading-relaxed text-[var(--muted)]">
                   {c.definition}
                 </p>
+                {c.images && c.images.length > 0 && (
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {c.images.map((img) => (
+                      <button
+                        key={img.id}
+                        onClick={() =>
+                          setLightbox({
+                            src: `/api/card-images/${img.id}`,
+                            caption: img.caption,
+                            term: c.term,
+                            setTitle: set?.title,
+                          })
+                        }
+                        className="spring overflow-hidden rounded-xl border border-[var(--border)]"
+                        title={img.caption}
+                      >
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={`/api/card-images/${img.id}`}
+                          alt={img.caption || c.term}
+                          loading="lazy"
+                          className="h-20 w-20 bg-black/5 object-cover"
+                        />
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
             ))}
           </div>
         </div>
       </div>
+
+      {lightbox && (
+        <ImageLightbox image={lightbox} onClose={() => setLightbox(null)} />
+      )}
     </div>
   );
 }
