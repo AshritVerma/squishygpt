@@ -36,7 +36,7 @@ How to answer:
 - Never invent citations. Do not claim something is in her sets if it is not in the context.
 
 Images:
-- Some context cards have an image, shown as a line "[Image on Card N: <caption>]". The number N is the image's reference.
+- Some context cards have an image, shown under that card as a line "[Image N: <caption>]". N is the image's own number, separate from the card numbers.
 - When a card's image visually shows what your answer is describing (a clinical appearance, an imaging/OCT/fundus finding, anatomy, or a diagram), place the marker [[image:N]] on its own line at the point in your answer where that picture belongs.
 - Usually place only the one or two most helpful images. Do not place an image that does not clearly illustrate the point.
 - Only use [[image:N]] for an N that is actually listed with an image in the context. Never invent an image number. Write the marker exactly as [[image:N]] with no other text on that line.

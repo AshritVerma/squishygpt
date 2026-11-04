@@ -73,7 +73,7 @@ function CardImage({
   return (
     <button
       onClick={() => onOpen(lightbox)}
-      className="spring shrink-0 overflow-hidden rounded-xl border border-[var(--border)]"
+      className="spring flex w-20 shrink-0 flex-col gap-1 text-left"
       title={image.caption}
     >
       {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -81,8 +81,13 @@ function CardImage({
         src={lightbox.src}
         alt={image.caption || image.term}
         loading="lazy"
-        className="h-20 w-20 bg-black/5 object-cover"
+        className="h-20 w-20 rounded-xl border border-[var(--border)] bg-black/5 object-cover"
       />
+      {image.term && (
+        <span className="w-full truncate text-[11px] font-medium text-[var(--muted)]">
+          {image.term}
+        </span>
+      )}
     </button>
   );
 }

@@ -126,6 +126,9 @@ export async function backfillSetImages(
     if (!card.termImage && !card.definitionImage) continue;
 
     let cardId = byKey.get(key(card.term, card.definition));
+    // A newly inserted card has no chunk yet, so it must be embedded even if
+    // every one of its images fails to download.
+    let changed = false;
     if (cardId == null) {
       // Image-only (or otherwise new) card the old exporter dropped.
       const [row] = await query<{ id: number }>(
@@ -135,13 +138,13 @@ export async function backfillSetImages(
       cardId = row.id;
       byKey.set(key(card.term, card.definition), cardId);
       result.newCards++;
+      changed = true;
     }
 
     const sides: Array<["term" | "definition", string | undefined]> = [
       ["term", card.termImage],
       ["definition", card.definitionImage],
     ];
-    let changed = false;
     for (const [side, url] of sides) {
       if (!url) continue;
       // Skip sides that already have a stored image (idempotent re-runs).

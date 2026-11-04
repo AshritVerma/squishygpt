@@ -30,13 +30,16 @@ export interface AnswerImage {
   setTitle: string;
 }
 
-// Shared SQL fragment: aggregate a card's images into a json array. Depends on
-// a `c` alias for the cards row being in scope.
-const IMAGES_JSON = `COALESCE(
-  json_agg(
-    json_build_object('id', ci.id, 'caption', ci.caption) ORDER BY ci.side
-  ) FILTER (WHERE ci.id IS NOT NULL),
-  '[]'
+// Shared SQL fragment: a card's images as a json array. Depends on a `c` alias
+// for the cards row. A correlated subquery rather than JOIN + GROUP BY, which
+// would force scoring every chunk instead of letting the HNSW index pick top-k.
+const IMAGES_JSON = `(
+  SELECT COALESCE(
+    json_agg(json_build_object('id', ci.id, 'caption', ci.caption) ORDER BY ci.side),
+    '[]'
+  )
+  FROM card_images ci
+  WHERE ci.card_id = c.id
 ) AS images`;
 
 /** Embed the question and return the top-k most similar cards (cosine). */
@@ -56,8 +59,6 @@ export async function retrieve(
      FROM chunks ch
      JOIN cards c ON c.id = ch.card_id
      JOIN sets  s ON s.id = ch.set_id
-     LEFT JOIN card_images ci ON ci.card_id = c.id
-     GROUP BY ch.id, ch.content, c.term, c.definition, s.title, s.id, ch.embedding
      ORDER BY ch.embedding <=> $1::vector
      LIMIT $2`,
     [vector, k],
@@ -122,9 +123,7 @@ export async function retrieveByKeyword(
      FROM cards c
      JOIN sets s ON s.id = c.set_id
      CROSS JOIN to_tsquery('english', $1) AS q(tsq)
-     LEFT JOIN card_images ci ON ci.card_id = c.id
      WHERE to_tsvector('english', c.term || ' ' || c.definition) @@ q.tsq
-     GROUP BY c.id, c.term, c.definition, s.title, s.id, q.tsq
      ORDER BY score DESC
      LIMIT $2`,
     [tsquery, k],
@@ -169,8 +168,9 @@ export async function retrieveWithFallback(
 export function buildContext(chunks: RetrievedChunk[]): string {
   if (chunks.length === 0) return "(No matching flashcards were found.)";
   // Images are numbered globally across all cards, in retrieval rank order, so
-  // the number in "[Image on Card N: ...]" matches both the [[image:N]] marker
-  // the model emits and the Nth entry from retrievedImages().
+  // the number in "[Image N: ...]" matches both the [[image:N]] marker the
+  // model emits and the Nth entry from retrievedImages(). Image numbers are
+  // independent of card numbers.
   let imageN = 0;
   return chunks
     .map((ch, i) => {
@@ -181,7 +181,7 @@ export function buildContext(chunks: RetrievedChunk[]): string {
       ];
       for (const img of ch.images ?? []) {
         imageN += 1;
-        lines.push(`[Image on Card ${imageN}: ${img.caption}]`);
+        lines.push(`[Image ${imageN}: ${img.caption}]`);
       }
       return lines.filter((l) => l !== "").join("\n");
     })

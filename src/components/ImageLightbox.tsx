@@ -40,7 +40,7 @@ export function ImageLightbox({
         <button
           onClick={onClose}
           aria-label="Close"
-          className="spring absolute -top-1 right-0 z-10 rounded-full bg-black/40 px-2.5 py-1 text-white/90 transition hover:bg-black/60"
+          className="spring self-end rounded-full bg-white/15 px-3 py-1.5 text-white transition hover:bg-white/25"
         >
           ✕
         </button>
@@ -48,7 +48,7 @@ export function ImageLightbox({
         <img
           src={image.src}
           alt={image.caption || image.term || "Card image"}
-          className="max-h-[75dvh] w-auto max-w-full touch-pinch-zoom rounded-2xl object-contain"
+          className="max-h-[70dvh] w-auto max-w-full touch-pinch-zoom rounded-2xl object-contain"
         />
         {(image.caption || image.term || image.setTitle) && (
           <div className="glass squish-shadow max-w-full rounded-2xl px-4 py-3 text-center">
