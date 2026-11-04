@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { MessageBubble, ChatMsg, Source } from "./MessageBubble";
+import { MessageBubble, ChatMsg, Source, AnswerImage } from "./MessageBubble";
 import { VoiceButton } from "./VoiceButton";
 import { SquishyMascot } from "./SquishyMascot";
 import { FloatingDoodles } from "./FloatingDoodles";
@@ -79,6 +79,27 @@ function prefersReducedMotion(): boolean {
 function uid() {
   return Math.random().toString(36).slice(2);
 }
+
+const GENERIC_ERROR =
+  "Sorry, I couldn't reach the brain just now. Please try again.";
+
+/** Prefer the API's explanation of a failure over a generic apology. */
+async function errorMessageFrom(res: Response): Promise<string> {
+  try {
+    const data = await res.json();
+    if (typeof data?.error === "string" && data.error.trim()) return data.error;
+  } catch {
+    /* non-JSON error body (e.g. an HTML error page) */
+  }
+  return GENERIC_ERROR;
+}
+
+/** Caveats for answers that weren't grounded by semantic search. */
+const RETRIEVAL_NOTICES: Record<string, string | undefined> = {
+  keyword:
+    "Set matching is degraded right now, so these cards were found by keyword. Double-check anything important.",
+  none: "I couldn't search your study sets for this one, so this answer isn't drawn from your cards.",
+};
 
 // Conversations are cached in localStorage and synced to the server
 // (client_state table), so history follows Serena across devices/domains.
@@ -407,7 +428,11 @@ export function Chat() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          messages: history.map((m) => ({ role: m.role, content: m.content })),
+          // Empty turns make Claude reject the whole request, so never send
+          // them. Older saved conversations can still contain one.
+          messages: history
+            .filter((m) => m.content.trim().length > 0)
+            .map((m) => ({ role: m.role, content: m.content })),
         }),
       });
 
@@ -416,7 +441,8 @@ export function Chat() {
         return;
       }
       if (!res.ok || !res.body) {
-        throw new Error("Request failed");
+        // The API explains what actually broke; prefer that over a guess.
+        throw new Error(await errorMessageFrom(res));
       }
 
       let sources: Source[] = [];
@@ -429,6 +455,20 @@ export function Chat() {
         }
       }
 
+      let images: AnswerImage[] = [];
+      const imagesHeader = res.headers.get("X-Images");
+      if (imagesHeader) {
+        try {
+          images = JSON.parse(atob(imagesHeader));
+        } catch {
+          /* ignore */
+        }
+      }
+
+      // Answers built without semantic search get a visible caveat, so a
+      // silently degraded answer is never mistaken for a grounded one.
+      const notice = RETRIEVAL_NOTICES[res.headers.get("X-Retrieval-Mode") ?? ""];
+
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
       let acc = "";
@@ -438,7 +478,9 @@ export function Chat() {
         acc += decoder.decode(value, { stream: true });
         setMessages((prev) =>
           prev.map((m) =>
-            m.id === assistantId ? { ...m, content: acc, pending: false } : m,
+            m.id === assistantId
+              ? { ...m, content: acc, pending: true, images, notice }
+              : m,
           ),
         );
       }
@@ -446,11 +488,11 @@ export function Chat() {
       setMessages((prev) =>
         prev.map((m) =>
           m.id === assistantId
-            ? { ...m, content: acc, pending: false, sources }
+            ? { ...m, content: acc, pending: false, sources, images, notice }
             : m,
         ),
       );
-    } catch {
+    } catch (err) {
       setMessages((prev) =>
         prev.map((m) =>
           m.id === assistantId
@@ -458,7 +500,9 @@ export function Chat() {
                 ...m,
                 pending: false,
                 content:
-                  "Sorry, I couldn't reach the brain just now. Please try again.",
+                  err instanceof Error && err.message
+                    ? err.message
+                    : "Sorry, I couldn't reach the brain just now. Please try again.",
               }
             : m,
         ),
@@ -740,7 +784,7 @@ export function Chat() {
                 mood={
                   m.role !== "assistant"
                     ? undefined
-                    : m.pending
+                    : m.pending && !m.content
                       ? "thinking"
                       : busy && i === messages.length - 1
                         ? "talking"

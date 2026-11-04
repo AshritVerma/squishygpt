@@ -12,6 +12,9 @@
 export interface Card {
   term: string;
   definition: string;
+  /** Optional image URLs captured from Quizlet (see scripts/quizlet-export.js). */
+  termImage?: string;
+  definitionImage?: string;
 }
 
 export interface ParseOptions {
@@ -66,7 +69,17 @@ export function parseQuizletText(
   return cards;
 }
 
-/** Text we embed and store for each card. */
-export function cardToContent(card: Card): string {
-  return `Term: ${card.term}\nDefinition: ${card.definition}`;
+/**
+ * Text we embed and store for each card. Any image captions are appended so an
+ * image-only card (empty term/definition) still has searchable content.
+ */
+export function cardToContent(
+  card: Card,
+  imageCaptions: string[] = [],
+): string {
+  let content = `Term: ${card.term}\nDefinition: ${card.definition}`;
+  for (const caption of imageCaptions) {
+    if (caption) content += `\nImage: ${caption}`;
+  }
+  return content;
 }

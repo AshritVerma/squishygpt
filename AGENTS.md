@@ -20,15 +20,17 @@ used in clinic by text or voice.
 - `src/lib/db.ts` — pooled Postgres client + `toVector()` helper.
 - `src/lib/embeddings.ts` — OpenAI embeddings (`text-embedding-3-small`, 1536 dims).
 - `src/lib/anthropic.ts` — Claude client, model, and system prompt.
-- `src/lib/quizlet.ts` — parses Quizlet exports into term/definition cards.
-- `src/lib/sets.ts` — `ingestSet`, `listSets`, `deleteSet`.
-- `src/lib/retrieval.ts` — embed query, pgvector top-k, build context + sources.
+- `src/lib/quizlet.ts` — parses Quizlet exports into term/definition cards (with optional `termImage`/`definitionImage`).
+- `src/lib/cardImages.ts` — download a card image (`fetchImage`) + Claude vision caption (`captionImage`).
+- `src/lib/sets.ts` — `ingestSet`, `listSets`, `deleteSet`, `backfillSetImages`.
+- `src/lib/retrieval.ts` — embed query, pgvector top-k, build context + sources + `retrievedImages`.
 - `src/lib/auth.ts` — session token sign/verify (Web Crypto, edge-safe).
 - `src/middleware.ts` — gates all routes except `/login` + `/api/login`.
-- `src/app/api/chat/route.ts` — RAG + streaming Claude; sources in `X-Sources` header.
+- `src/app/api/chat/route.ts` — RAG + streaming Claude; sources in `X-Sources`, card images in `X-Images`.
 - `src/app/api/sets/route.ts` — GET/POST/DELETE study sets (admin).
+- `src/app/api/card-images/[id]/route.ts` — serves a stored card image (bytes + mime, immutably cached).
 - `src/app/api/login|logout/route.ts` — auth.
-- `src/components/Chat.tsx`, `MessageBubble.tsx`, `VoiceButton.tsx` — UI.
+- `src/components/Chat.tsx`, `MessageBubble.tsx`, `VoiceButton.tsx`, `ImageLightbox.tsx` — UI.
 - `src/app/page.tsx` (chat), `login/page.tsx`, `admin/page.tsx`.
 - `db/schema.sql`, `scripts/migrate.ts`, `scripts/ingest.ts`, `data/`.
 
@@ -45,8 +47,17 @@ used in clinic by text or voice.
 npm run dev        # local dev
 npm run migrate    # apply db/schema.sql (needs DATABASE_URL)
 npm run ingest -- --title "Set Name" path/to/export.txt
+npm run ingest:json # ingest data/quizlet-export.json (downloads + captions any card images)
+npm run ingest:json -- --images # backfill images onto already-ingested sets (stable set ids)
 npm run build && npm start
 ```
+
+Card images: the Quizlet exporter (`scripts/quizlet-export.js`) captures image
+URLs per card side; ingest downloads them into the `card_images` table and
+writes a Claude vision caption (model via `CAPTION_MODEL`, defaults to Haiku).
+The caption is embedded with the card so image-only cards are searchable. Every
+image on a retrieved card is sent to the client; Claude places the most useful
+inline with `[[image:N]]` markers and the rest render in a thumbnail strip.
 
 ## Known next steps
 

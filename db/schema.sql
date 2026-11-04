@@ -17,6 +17,13 @@ CREATE TABLE IF NOT EXISTS cards (
   created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+-- Full-text index backing the keyword retrieval fallback (see lib/retrieval),
+-- which grounds answers in her cards when the embedding API is unreachable.
+-- The expression must stay identical to the one in retrieveByKeyword() for
+-- the index to be used.
+CREATE INDEX IF NOT EXISTS cards_fts_idx
+  ON cards USING gin (to_tsvector('english', term || ' ' || definition));
+
 -- One embedded chunk per card. vector(1536) matches text-embedding-3-small.
 CREATE TABLE IF NOT EXISTS chunks (
   id          BIGSERIAL PRIMARY KEY,
@@ -28,6 +35,26 @@ CREATE TABLE IF NOT EXISTS chunks (
 );
 
 CREATE INDEX IF NOT EXISTS chunks_set_id_idx ON chunks (set_id);
+
+-- Images attached to a card side (from Quizlet). Stored in Postgres rather
+-- than hotlinked from Quizlet's CDN: they are small, Railway Postgres is
+-- already here, and CDN links can break. An image-only side keeps its text
+-- column as '' so the cards NOT NULL constraints still hold. The caption is a
+-- Claude-written clinical description that also gets embedded with the card,
+-- so image-only cards become searchable.
+CREATE TABLE IF NOT EXISTS card_images (
+  id          BIGSERIAL PRIMARY KEY,
+  card_id     BIGINT NOT NULL REFERENCES cards(id) ON DELETE CASCADE,
+  side        TEXT NOT NULL CHECK (side IN ('term', 'definition')),
+  source_url  TEXT NOT NULL,
+  mime        TEXT NOT NULL,
+  bytes       BYTEA NOT NULL,
+  caption     TEXT NOT NULL,
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE (card_id, side)
+);
+
+CREATE INDEX IF NOT EXISTS card_images_card_id_idx ON card_images (card_id);
 
 -- HNSW index for cosine similarity search. HNSW gives accurate results at any
 -- scale (unlike ivfflat, which needs many rows per list to behave well), so it

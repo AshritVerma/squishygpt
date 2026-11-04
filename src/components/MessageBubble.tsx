@@ -1,13 +1,23 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { SquishyMascot, MascotMood } from "./SquishyMascot";
 import { SetModal } from "./SetModal";
+import { ImageLightbox, LightboxImage } from "./ImageLightbox";
 
 export interface Source {
   setId: number;
+  setTitle: string;
+}
+
+/** An image attached to a retrieved card, numbered to match [[image:N]]. */
+export interface AnswerImage {
+  n: number;
+  id: number;
+  caption: string;
+  term: string;
   setTitle: string;
 }
 
@@ -16,7 +26,65 @@ export interface ChatMsg {
   role: "user" | "assistant";
   content: string;
   sources?: Source[];
+  /** Images on retrieved cards; some placed inline, the rest shown in a strip. */
+  images?: AnswerImage[];
   pending?: boolean;
+  /** Caveat shown above the answer, e.g. when set matching was degraded. */
+  notice?: string;
+}
+
+const IMAGE_MARKER = /\[\[image:(\d+)\]\]/g;
+// A partial marker still being streamed, e.g. "[[image:1" — hidden until done.
+const PARTIAL_MARKER = /\[\[(?:i(?:m(?:a(?:g(?:e(?::\d*)?)?)?)?)?)?$/;
+
+/** A single image that opens a lightbox on tap. */
+function CardImage({
+  image,
+  onOpen,
+  variant,
+}: {
+  image: AnswerImage;
+  onOpen: (img: LightboxImage) => void;
+  variant: "inline" | "thumb";
+}) {
+  const lightbox: LightboxImage = {
+    src: `/api/card-images/${image.id}`,
+    caption: image.caption,
+    term: image.term,
+    setTitle: image.setTitle,
+  };
+  if (variant === "inline") {
+    return (
+      <button
+        onClick={() => onOpen(lightbox)}
+        className="spring my-2 block w-full overflow-hidden rounded-2xl border border-[var(--border)]"
+        title={image.caption}
+      >
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={lightbox.src}
+          alt={image.caption || image.term}
+          loading="lazy"
+          className="max-h-72 w-full bg-black/5 object-contain"
+        />
+      </button>
+    );
+  }
+  return (
+    <button
+      onClick={() => onOpen(lightbox)}
+      className="spring shrink-0 overflow-hidden rounded-xl border border-[var(--border)]"
+      title={image.caption}
+    >
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={lightbox.src}
+        alt={image.caption || image.term}
+        loading="lazy"
+        className="h-20 w-20 bg-black/5 object-cover"
+      />
+    </button>
+  );
 }
 
 export function MessageBubble({
@@ -29,6 +97,42 @@ export function MessageBubble({
 }) {
   const isUser = message.role === "user";
   const [openSetId, setOpenSetId] = useState<number | null>(null);
+  const [lightbox, setLightbox] = useState<LightboxImage | null>(null);
+
+  // Split the answer into markdown segments interleaved with inline images,
+  // and figure out which images were NOT placed inline (they go in the strip).
+  const { segments, placed } = useMemo(() => {
+    const byN = new Map<number, AnswerImage>();
+    for (const img of message.images ?? []) byN.set(img.n, img);
+
+    // While streaming, hide a trailing partial "[[image:..." so it can't flash.
+    let text = message.content;
+    if (message.pending) text = text.replace(PARTIAL_MARKER, "");
+
+    const segs: Array<
+      { type: "text"; text: string } | { type: "image"; image: AnswerImage }
+    > = [];
+    const used = new Set<number>();
+    let lastIndex = 0;
+    for (const m of text.matchAll(IMAGE_MARKER)) {
+      const n = Number(m[1]);
+      const img = byN.get(n);
+      const start = m.index ?? 0;
+      // Keep the preceding text regardless; only emit an image for a real N.
+      const before = text.slice(lastIndex, start);
+      if (before) segs.push({ type: "text", text: before });
+      if (img && !used.has(n)) {
+        segs.push({ type: "image", image: img });
+        used.add(n);
+      }
+      lastIndex = start + m[0].length;
+    }
+    const tail = text.slice(lastIndex);
+    if (tail) segs.push({ type: "text", text: tail });
+
+    const rest = (message.images ?? []).filter((img) => !used.has(img.n));
+    return { segments: segs, placed: rest };
+  }, [message.content, message.images, message.pending]);
 
   return (
     <div
@@ -67,11 +171,48 @@ export function MessageBubble({
         ) : isUser ? (
           <p className="whitespace-pre-wrap">{message.content}</p>
         ) : (
-          <div className="prose-squish">
-            <ReactMarkdown remarkPlugins={[remarkGfm]}>
-              {message.content}
-            </ReactMarkdown>
-          </div>
+          <>
+            {message.notice && (
+              <p className="mb-2 flex items-start gap-1.5 rounded-xl bg-amber-500/10 px-2.5 py-1.5 text-xs text-amber-600 dark:text-amber-400">
+                <span aria-hidden="true">⚠️</span>
+                <span>{message.notice}</span>
+              </p>
+            )}
+            <div className="prose-squish">
+              {segments.map((seg, i) =>
+                seg.type === "text" ? (
+                  <ReactMarkdown key={i} remarkPlugins={[remarkGfm]}>
+                    {seg.text}
+                  </ReactMarkdown>
+                ) : (
+                  <CardImage
+                    key={i}
+                    image={seg.image}
+                    variant="inline"
+                    onOpen={setLightbox}
+                  />
+                ),
+              )}
+            </div>
+
+            {!message.pending && placed.length > 0 && (
+              <div className="mt-3 border-t border-[var(--border)] pt-2.5">
+                <span className="text-xs font-medium text-[var(--muted)]">
+                  From your cards:
+                </span>
+                <div className="scroll-area mt-1.5 flex gap-2 overflow-x-auto pb-1">
+                  {placed.map((img) => (
+                    <CardImage
+                      key={img.id}
+                      image={img}
+                      variant="thumb"
+                      onOpen={setLightbox}
+                    />
+                  ))}
+                </div>
+              </div>
+            )}
+          </>
         )}
 
         {!isUser && message.sources && message.sources.length > 0 && (
@@ -108,6 +249,10 @@ export function MessageBubble({
 
       {openSetId != null && (
         <SetModal setId={openSetId} onClose={() => setOpenSetId(null)} />
+      )}
+
+      {lightbox && (
+        <ImageLightbox image={lightbox} onClose={() => setLightbox(null)} />
       )}
     </div>
   );

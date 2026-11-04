@@ -38,7 +38,9 @@
 
 (async () => {
   const DB_NAME = "qz_export";
-  const STORE = "sets";
+  // Bumped from "sets" so a re-run re-fetches every set with the new image
+  // fields instead of reusing the old text-only cache.
+  const STORE = "sets_v2";
 
   const PROFILE_URL_RE = /\/user\/[^/]+\/sets\/?$/;
   if (!PROFILE_URL_RE.test(location.pathname)) {
@@ -54,6 +56,7 @@
   const ONLY_FIRST = window.QZ_ONLY_FIRST === true;
   const LIMIT = typeof window.QZ_LIMIT === "number" ? window.QZ_LIMIT : null;
   const DOM_FALLBACK = window.QZ_DOM_FALLBACK === true;
+  const DEBUG = window.QZ_DEBUG === true;
 
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   const jitter = (ms) => ms + Math.floor(Math.random() * 400);
@@ -65,7 +68,7 @@
   // ---------------------------------------------------------------------------
   function openDb() {
     return new Promise((resolve, reject) => {
-      const req = indexedDB.open(DB_NAME, 1);
+      const req = indexedDB.open(DB_NAME, 2);
       req.onupgradeneeded = () => {
         const db = req.result;
         if (!db.objectStoreNames.contains(STORE)) db.createObjectStore(STORE);
@@ -209,7 +212,8 @@
   // ---------------------------------------------------------------------------
   function extractSidesFromItem(item) {
     // Each `cardSide` has a `label` ("word" | "definition") and a `media`
-    // array whose entries have `plainText` (or `richText`).
+    // array whose entries carry text (`plainText` / `richText`) and/or an
+    // image (`url` on an image-type media entry).
     const sides =
       item?.cardSides ||
       item?.studiableItem?.cardSides ||
@@ -217,6 +221,8 @@
       [];
     let term = "";
     let definition = "";
+    let termImage = "";
+    let definitionImage = "";
     for (const side of sides) {
       const label = side.label || side.sideLabel || "";
       const media = side.media || side.mediaList || [];
@@ -225,13 +231,36 @@
         .filter(Boolean)
         .join(" ")
         .trim();
-      if (!text) continue;
-      if (label === "word") term = text;
-      else if (label === "definition") definition = text;
-      else if (!term) term = text;
-      else if (!definition) definition = text;
+      // Quizlet image media exposes the asset under a few shapes depending on
+      // API version: a bare `url`, or an `image`/`media` object with a `url`
+      // (sometimes `src`). Prefer a reasonably large rendition when offered.
+      let image = "";
+      for (const m of media) {
+        const url =
+          m?.url ||
+          m?.image?.url ||
+          m?.image?.src ||
+          m?.media?.url ||
+          m?.src ||
+          "";
+        if (url && /^https?:\/\//.test(url)) {
+          image = url;
+          break;
+        }
+      }
+      // Decide which logical side this is. Text-only cards keep their old
+      // behavior; image-only sides are kept (text may be empty).
+      const isTerm =
+        label === "word" ? true : label === "definition" ? false : !term && !termImage;
+      if (isTerm) {
+        if (text) term = text;
+        if (image && !termImage) termImage = image;
+      } else {
+        if (text) definition = text;
+        if (image && !definitionImage) definitionImage = image;
+      }
     }
-    return { term, definition };
+    return { term, definition, termImage, definitionImage };
   }
 
   async function fetchCardsViaApiOnce(setId) {
@@ -256,10 +285,28 @@
       data?.models?.studiableItem ||
       data?.items ||
       [];
+    if (DEBUG && items.length > 0) {
+      // One-time peek at the raw media shape so the image fields can be
+      // confirmed against a real set before trusting the full run.
+      const sample = items[0]?.cardSides || items[0]?.studiableItem?.cardSides;
+      console.log(
+        "[quizlet-export] QZ_DEBUG raw cardSides of first item:",
+        JSON.stringify(sample, null, 2),
+      );
+    }
     const cards = [];
     for (const item of items) {
-      const { term, definition } = extractSidesFromItem(item);
-      if (term && definition) cards.push({ term, definition });
+      const { term, definition, termImage, definitionImage } =
+        extractSidesFromItem(item);
+      // Keep a card if either side has text OR an image. Image-only cards
+      // (often "what does this look like") were previously dropped.
+      const hasContent =
+        term || definition || termImage || definitionImage;
+      if (!hasContent) continue;
+      const card = { term, definition };
+      if (termImage) card.termImage = termImage;
+      if (definitionImage) card.definitionImage = definitionImage;
+      cards.push(card);
     }
     return cards;
   }
