@@ -1,0 +1,51 @@
+{
+  "id": 1880893538975746,
+  "studiableContainerType": 1,
+  "studiableContainerId": 1231031800,
+  "type": 2,
+  "rank": 1,
+  "creatorId": 44989910,
+  "timestamp": 1793759860,
+  "lastModified": 1793759860,
+  "isDeleted": false,
+  "cardSides": [
+    {
+      "sideId": 0,
+      "label": "word",
+      "media": [
+        {
+          "type": 1,
+          "plainText": "Horner's syndrome",
+          "languageCode": "en",
+          "ttsUrl": "https://quizlet.com/v1/tts/en.mp3?v=2&b=SG9ybmVyJ3Mgc3luZHJvbWU&s=N2UzOTU2ZTE",
+          "ttsSlowUrl": "https://quizlet.com/v1/tts/en.mp3?v=2&b=SG9ybmVyJ3Mgc3luZHJvbWU&s=N2UzOTU2ZTE&speed=70",
+          "richText": null
+        }
+      ],
+      "distractors": []
+    },
+    {
+      "sideId": 1,
+      "label": "definition",
+      "media": [
+        {
+          "type": 2,
+          "code": "4pG2e2MqkhfwgJy5",
+          "url": "https://o.quizlet.com/SUn7gQJ6WnlmBCX-E-KKZA_m.png",
+          "width": 704,
+          "height": 526,
+          "attribution": null
+        },
+        {
+          "type": 1,
+          "plainText": "muller's ptosis, miosis, anhidrosis\nreverse ptosis= lower eye lid elevation\niris heterochromia= lighter iris color in congenital cases \n\n1. Central (1st-order) neuron= Hypothalamus → descends to lateral horn\nex. stroke, MS\n2. Preganglionic (2nd-order) neuron= Ciliospinal Center of Budge; fibers exit and travel over the lung apex\nex. lung pancoast tumor, aortic aneurysm \n3. Postganglionic (3rd-order) neuron= Superior Cervical Ganglion → travels to the pupillary dilator and Müller's muscle\nex. cavernous sinus, painful and acute=carotid dissection\n\norder: CBC, CT or MRI of chest and neck for lung tumor, MRA or CT angiography (CTA) of the head/neck for carotid dissection \nif carotid diseection order immediately, otherwise 1-2 days",
+          "languageCode": "en",
+          "ttsUrl": null,
+          "ttsSlowUrl": null,
+          "richText": null
+        }
+      ],
+      "distractors": []
+    }
+  ]
+}
