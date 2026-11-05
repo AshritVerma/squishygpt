@@ -34,7 +34,7 @@ export function ImageLightbox({
     >
       <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" />
       <div
-        className="bubble-in relative flex max-h-[92dvh] w-full max-w-3xl flex-col items-center gap-3"
+        className="bubble-in relative flex max-h-[92dvh] w-full min-w-0 max-w-3xl flex-col items-center gap-3"
         onClick={(e) => e.stopPropagation()}
       >
         <button
