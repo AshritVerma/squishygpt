@@ -88,7 +88,12 @@ export async function captionImage(
   const res = await anthropicClient().messages.create(
     {
       model: CAPTION_MODEL,
-      max_tokens: 300,
+      max_tokens: 600,
+      // Generation-5 models think by default and can spend the whole budget
+      // before writing any caption; "between_tools" is how they turn it off.
+      ...(/^claude-(haiku|sonnet|opus)-5/.test(CAPTION_MODEL)
+        ? { thinking: { type: "between_tools" } as unknown as { type: "disabled" } }
+        : {}),
       messages: [
         {
           role: "user",
@@ -117,13 +122,18 @@ export async function captionImage(
 
   // Captions are rendered as single "[Image N: ...]" context lines, so flatten
   // any markdown headings or line breaks the model adds anyway.
-  return res.content
+  const caption = res.content
     .map((b) => (b.type === "text" ? b.text : ""))
     .join(" ")
     .replace(/^\s*#+\s.*$/gm, "")
     .replace(/[*_`]/g, "")
     .replace(/\s+/g, " ")
     .trim();
+  // A cut-off or empty caption is worse than none: fail so a re-run retries.
+  if (res.stop_reason === "max_tokens" || !caption) {
+    throw new Error(`Incomplete caption (stop_reason: ${res.stop_reason})`);
+  }
+  return caption;
 }
 
 // The same image often appears on several cards; caption it once per process.
