@@ -593,11 +593,18 @@ export function Chat() {
             </div>
           )}
         </div>
+        {/* On phones the header has no room for this, so it lives here. */}
+        <button
+          onClick={logout}
+          className="mx-4 mb-4 rounded-2xl py-2 text-sm font-medium text-[var(--muted)] transition hover:bg-[var(--accent)]/10 hover:text-[var(--accent)] sm:hidden"
+        >
+          Sign out
+        </button>
       </aside>
 
       {/* Header */}
-      <header className="glass sticky top-0 z-10 flex items-center justify-between px-3 py-3 sm:px-6">
-        <div className="flex items-center gap-1.5">
+      <header className="glass sticky top-0 z-10 flex items-center justify-between gap-1 px-2 py-3 sm:px-6">
+        <div className="flex min-w-0 items-center gap-1.5">
           <button
             onClick={() => setPanelOpen(true)}
             aria-label="Open conversation history"
@@ -617,21 +624,21 @@ export function Chat() {
               <line x1="4" y1="17" x2="14" y2="17" />
             </svg>
           </button>
-          <a href="/" className="flex items-center gap-2.5">
-            <div className="float-y">
+          <a href="/" className="flex min-w-0 items-center gap-2 sm:gap-2.5">
+            <div className="float-y shrink-0">
               <SquishyMascot size={40} interactive={false} />
             </div>
-            <div className="leading-tight">
-              <h1 className="text-lg font-extrabold tracking-tight">
+            <div className="min-w-0 leading-tight">
+              <h1 className="truncate text-lg font-extrabold tracking-tight">
                 <span className="accent-text">SquishyGPT</span>
               </h1>
-              <p className="text-[11px] text-[var(--muted)]">
+              <p className="truncate text-[11px] text-[var(--muted)]">
                 Serena&apos;s optometry brain
               </p>
             </div>
           </a>
         </div>
-        <div className="flex items-center gap-2 sm:gap-3">
+        <div className="flex shrink-0 items-center sm:gap-3">
           {birthday && (
             <button
               onClick={() => setRecapOpen(true)}
@@ -665,13 +672,13 @@ export function Chat() {
           </button>
           <a
             href="/admin"
-            className="whitespace-nowrap rounded-full px-3 py-2 text-xs font-medium text-[var(--muted)] transition duration-200 hover:-translate-y-0.5 hover:bg-[var(--accent)]/10 hover:text-[var(--accent)]"
+            className="whitespace-nowrap rounded-full px-2 py-2 text-xs font-medium text-[var(--muted)] transition duration-200 hover:-translate-y-0.5 hover:bg-[var(--accent)]/10 hover:text-[var(--accent)] sm:px-3"
           >
             Study sets
           </a>
           <button
             onClick={logout}
-            className="whitespace-nowrap rounded-full px-3 py-2 text-xs font-medium text-[var(--muted)] transition duration-200 hover:-translate-y-0.5 hover:bg-[var(--accent)]/10 hover:text-[var(--accent)]"
+            className="hidden whitespace-nowrap rounded-full px-3 py-2 text-xs font-medium text-[var(--muted)] transition duration-200 hover:-translate-y-0.5 hover:bg-[var(--accent)]/10 hover:text-[var(--accent)] sm:block"
           >
             Sign out
           </button>
