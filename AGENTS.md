@@ -29,6 +29,8 @@ used in clinic by text or voice.
 - `src/app/api/chat/route.ts` — RAG + streaming Claude; sources in `X-Sources`, card images in `X-Images`.
 - `src/app/api/sets/route.ts` — GET/POST/DELETE study sets (admin).
 - `src/app/api/card-images/[id]/route.ts` — serves a stored card image (bytes + mime, immutably cached).
+- `src/app/api/arcade/image-cards/route.ts` — random image cards + same-set multiple-choice terms for the study games.
+- `src/components/arcade/` — Cleia's Arcade. Study games built on card images: `NameThatPicGame`, `PicMatchGame`, `SnapJudgmentGame` (shared bits in `imageCards.tsx`). New game ids need an `EARN_CAPS` entry in `src/lib/rewards.ts` or the wallet rejects their sessions.
 - `src/app/api/login|logout/route.ts` — auth.
 - `src/components/Chat.tsx`, `MessageBubble.tsx`, `VoiceButton.tsx`, `ImageLightbox.tsx` — UI.
 - `src/app/page.tsx` (chat), `login/page.tsx`, `admin/page.tsx`.

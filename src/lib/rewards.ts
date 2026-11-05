@@ -119,6 +119,9 @@ export const EARN_CAPS: Record<string, number> = {
   focus: 600,
   zoomies: 800,
   memory: 200,
+  namepic: 300,
+  picmatch: 150,
+  snap: 500,
 };
 
 // Fallback cap for any game id not listed above.

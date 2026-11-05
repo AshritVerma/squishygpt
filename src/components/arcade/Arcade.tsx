@@ -1,12 +1,15 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useRef, useState } from "react";
 import { RunnerGame } from "./RunnerGame";
 import { CatchGame } from "./CatchGame";
 import { FlappyGame } from "./FlappyGame";
 import { FocusGame } from "./FocusGame";
 import { ZoomiesGame } from "./ZoomiesGame";
 import { MemoryGame } from "./MemoryGame";
+import { NameThatPicGame } from "./NameThatPicGame";
+import { PicMatchGame } from "./PicMatchGame";
+import { SnapJudgmentGame } from "./SnapJudgmentGame";
 import { Shop } from "./Shop";
 import { fetchClientState, pushClientState } from "@/lib/clientState";
 import {
@@ -56,11 +59,33 @@ const GAMES = [
     blurb: "Flip the cards, find the pairs.",
     Component: MemoryGame,
   },
+  {
+    id: "namepic",
+    title: "Name That Pic",
+    blurb: "A picture from your cards. Pick the right term.",
+    Component: NameThatPicGame,
+    study: true,
+  },
+  {
+    id: "picmatch",
+    title: "Pic Match",
+    blurb: "Memory with your card images: match each to its term.",
+    Component: PicMatchGame,
+    study: true,
+  },
+  {
+    id: "snap",
+    title: "Snap Judgment",
+    blurb: "45 seconds. Is the picture what it says?",
+    Component: SnapJudgmentGame,
+    study: true,
+  },
 ] as const satisfies readonly {
   id: string;
   title: string;
   blurb: string;
   Component: (props: GameProps) => React.ReactNode;
+  study?: boolean;
 }[];
 
 type GameId = (typeof GAMES)[number]["id"];
@@ -282,26 +307,32 @@ export function Arcade({ onClose }: { onClose: () => void }) {
             <p className="text-center text-xs text-[var(--muted)]">
               Take a quick break with Cleia. 🐾
             </p>
-            {GAMES.map((g) => (
-              <button
-                key={g.id}
-                onClick={() => enterGame(g.id)}
-                className="glass glow-hover squish-shadow flex items-center justify-between rounded-2xl px-4 py-4 text-left"
-              >
-                <span>
-                  <span className="block font-bold">
-                    {bday && g.id === "catch" ? "Cake Catch 🎂" : g.title}
+            {GAMES.map((g, i) => (
+              <Fragment key={g.id}>
+                {"study" in g && i > 0 && !("study" in GAMES[i - 1]) && (
+                  <p className="pt-2 text-center text-xs font-semibold text-[var(--muted)]">
+                    Study with your cards 📸
+                  </p>
+                )}
+                <button
+                  onClick={() => enterGame(g.id)}
+                  className="glass glow-hover squish-shadow flex items-center justify-between rounded-2xl px-4 py-4 text-left"
+                >
+                  <span>
+                    <span className="block font-bold">
+                      {bday && g.id === "catch" ? "Cake Catch 🎂" : g.title}
+                    </span>
+                    <span className="block text-xs text-[var(--muted)]">
+                      {bday && g.id === "catch"
+                        ? "Birthday special: catch the cake, 2× points!"
+                        : g.blurb}
+                    </span>
                   </span>
-                  <span className="block text-xs text-[var(--muted)]">
-                    {bday && g.id === "catch"
-                      ? "Birthday special: catch the cake, 2× points!"
-                      : g.blurb}
+                  <span className="shrink-0 text-xs font-semibold text-[var(--accent)]">
+                    Best {bests[g.id]}
                   </span>
-                </span>
-                <span className="shrink-0 text-xs font-semibold text-[var(--accent)]">
-                  Best {bests[g.id]}
-                </span>
-              </button>
+                </button>
+              </Fragment>
             ))}
             <button
               onClick={() => setScreen("shop")}
